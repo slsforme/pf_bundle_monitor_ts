@@ -1,0 +1,24 @@
+[source]
+token_parser_uri = "wss://pumpportal.fun/api/data"  # For Websockets
+token_parser_url = ""  # For REST / GRPC / GraphQL APIs 
+rpc_uri = "ws://frankfurt.rpc.pinnaclenode.com"  # For Websockets
+rpc_url = "http://frankfurt.rpc.pinnaclenode.com/"  # For REST / GRPC / GraphQL APIs
+grpc_url = "http://frankfurt.grpc.pinnaclenode.com"  # If GRPC throws exception: delete port or slash after url 
+backup_rpc_uri = ""
+backup_rpc_url = ""
+backup_grpc_url = ""
+
+
+[numbers]
+cache_expiration_min = 10  # Timeout for removing token from pump.fun monitor in minutes
+raydium_cache_expitation_min = 10   # Timeout for removing token from Raydium monitor in minutes
+wallet_iteration_count = 1  # Quantity of iterations through wallets
+
+
+[pumpfun]
+pump_program = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"
+raydium_program = "39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg"
+
+
+
+
