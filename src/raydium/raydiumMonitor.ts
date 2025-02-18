@@ -1,14 +1,7 @@
 import Client, {
     CommitmentLevel,
-    SubscribeRequestAccountsDataSlice,
-    SubscribeRequestFilterAccounts,
-    SubscribeRequestFilterBlocks,
-    SubscribeRequestFilterBlocksMeta,
-    SubscribeRequestFilterEntry,
-    SubscribeRequestFilterSlots,
-    SubscribeRequestFilterTransactions,
+    SubscribeRequest
 } from "@triton-one/yellowstone-grpc";
-import { SubscribeRequestPing } from "@triton-one/yellowstone-grpc/dist/grpc/geyser";
 import { Mutex } from "async-mutex"; 
 import { DateTime } from 'luxon';
 import { setTimeout as sleep } from "node:timers/promises";
@@ -20,21 +13,6 @@ import { grpcUrl, backupGrpcUrl, raydiumCacheExpitationMin } from "../../config/
 
 
 const MIGRATION = '39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg';
- 
-interface SubscribeRequest {
-    accounts: { [key: string]: SubscribeRequestFilterAccounts };
-    slots: { [key: string]: SubscribeRequestFilterSlots };
-    transactions: { [key: string]: SubscribeRequestFilterTransactions };
-    transactionsStatus: { [key: string]: SubscribeRequestFilterTransactions };
-    blocks: { [key: string]: SubscribeRequestFilterBlocks };
-    blocksMeta: { [key: string]: SubscribeRequestFilterBlocksMeta };
-    entry: { [key: string]: SubscribeRequestFilterEntry };
-    commitment?: CommitmentLevel | undefined;
-    accountsDataSlice: SubscribeRequestAccountsDataSlice[];
-    ping?: SubscribeRequestPing | undefined;
-} 
-   
-
 
 export class RaydiumMigrationsMonitor {
   private client: Client;
@@ -60,7 +38,6 @@ export class RaydiumMigrationsMonitor {
           accountRequired: [],
         },
       },
-      transactionsStatus: {},
       entry: {},
       blocks: {},
       blocksMeta: {},
@@ -106,9 +83,14 @@ export class RaydiumMigrationsMonitor {
   private async addToken(tokenAddress: string): Promise<void> {
     const release = await this.lock.acquire();
     try {
+      if (this.tokens.has(tokenAddress)) {
+        logger.info(`Token ${tokenAddress} is already being tracked.`);
+        return;  // Если токен уже существует, выходим
+      }
+
       const expirationTime = new Date(Date.now() + raydiumCacheExpitationMin * 60000);
       this.tokens.set(tokenAddress, expirationTime);
-      logger.info(`Got migrated Token: ${tokenAddress}, going to be deleted at ${DateTime.fromMillis(Date.now() + raydiumCacheExpitationMin * 60000, { zone: 'Europe/Paris' })}`);
+      logger.info(`Tracking migrated Token: ${tokenAddress}, going to be deleted at ${DateTime.fromMillis(Date.now() + raydiumCacheExpitationMin * 60000, { zone: 'Europe/Paris' })}`);
     } finally {
       release();
     }
@@ -121,9 +103,9 @@ export class RaydiumMigrationsMonitor {
     try {
       if (this.tokens.has(tokenAddress)) {
         this.tokens.delete(tokenAddress);
-        logger.info(`Manually removed token: ${tokenAddress}`);
+        logger.info(`Manually removed token from Raydium Monitor: ${tokenAddress}`);
       } else {
-        logger.warn(`Tried to remove non-existing token: ${tokenAddress}`);
+        logger.warn(`Tried to remove non-existing token from Raydium Monitor: ${tokenAddress}`);
       }
     } finally {
       release();
@@ -149,7 +131,7 @@ export class RaydiumMigrationsMonitor {
         const transaction = searchForInitialize2(result)
         if(!transaction) return;
         const pf_ca = transaction.message.accountKeys.filter(key => key.includes('pump'))[0];
-        if(pf_ca){
+        if (pf_ca && !this.tokens.has(pf_ca)) {
           await this.addToken(pf_ca);
         }
         

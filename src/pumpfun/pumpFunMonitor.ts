@@ -1,28 +1,33 @@
-import Client, { CommitmentLevel, SubscribeRequest } from "@triton-one/yellowstone-grpc";
+import Client, { CommitmentLevel, SubscribeRequest, SubscribeUpdate } from "@triton-one/yellowstone-grpc";
 
-import { tOutPut } from "./transactionOutput";
+import { pumpFunTransactionOutput } from "./utils/pumpFunTransactionOutput";
 import { grpcUrl, backupGrpcUrl } from "../../config/config";
 import { logger } from "../../config/appConfig";
+import { tokenMonitor, TokenMonitor } from "./tokenMonitor";
+import { tokenBuyMonitor } from "./tokenBuysMonitor";
 
+const PUMPFUN = "TSLvdd1pWpHVjahSpsvCXUbgwsL3JAcvokwaKt1eokM";
 
-class TokenBuysMonitor {
+export class PumpFunMonitor {
   private client: Client;
   private request: SubscribeRequest;
-  private endpoint: string;
+  private tokenMonitor: TokenMonitor;
 
-  constructor(endpoint: string, ) {
+  constructor(private endpoint: string = grpcUrl, tokenMonitor: TokenMonitor) {
     this.endpoint = endpoint;
     this.client = new Client(this.endpoint, undefined, undefined);
+    this.tokenMonitor = tokenMonitor;  
+    this.tokenMonitor.monitorTokens();  
 
     this.request = {
-      "accounts": { },
+      accounts: {},
       slots: {},
       transactions: {
         pumpfun: {
           vote: false,
           failed: false,
           signature: undefined,
-          accountInclude: ["GynunK282RndoRz3mrq7ma6ruenr5DQNP2Z4iTjCpump"],  // сделать для каждого отдельного токена
+          accountInclude: [PUMPFUN],
           accountExclude: [],
           accountRequired: [],
         },
@@ -32,7 +37,7 @@ class TokenBuysMonitor {
       blocksMeta: {},
       accountsDataSlice: [],
       ping: undefined,
-      commitment: CommitmentLevel.FINALIZED,
+      commitment: CommitmentLevel.PROCESSED,
     };
   }
 
@@ -51,6 +56,7 @@ class TokenBuysMonitor {
   private async checkConnection() {
     try {
       await this.client.ping(1);
+      logger.info(`Connected to ${this.endpoint}`);
     } catch (error) {
       logger.error(`Ping failed for ${this.endpoint}, switching to backup...`);
       this.endpoint = this.endpoint === grpcUrl ? backupGrpcUrl : grpcUrl;
@@ -72,20 +78,18 @@ class TokenBuysMonitor {
       stream.on("close", resolve);
     });
 
-    stream.on("data", async (data) => {
+    stream.on("data", async (data: SubscribeUpdate) => {
       try {
-        const result = await tOutPut(data);
-        const logs: string[] = result.meta.logMessages;
-        if (logs.some(str => str.includes("Buy"))){
-          const wallet: string = result.message.accountKeys[0];
-          // TODO: check wallet txs
-        } 
-      } catch (error) {
-        if (error instanceof TypeError) {
-          // pass
-        } else {
-          logger.error("Error occurred: ", error);
+        const result = await pumpFunTransactionOutput(data);
+        if (!result) return;
+        const ca = result.meta.postTokenBalances[0]?.mint;
+        logger.info(`New pump.fun token detected: ${ca}`);
+        if (ca) {
+          this.tokenMonitor.addToken(ca);
+          tokenBuyMonitor.addTokenBuyTask(ca);
         }
+      } catch (error) {
+        logger.error("Error occurred: " + error);
       }
     });
 
@@ -105,14 +109,3 @@ class TokenBuysMonitor {
     await streamClosed;
   }
 }
-
-
-async function main() {
-  const pumpFunMonitor = new TokenBuysMonitor(grpcUrl);
-  await pumpFunMonitor.startMonitoring();
-}
-
-main().catch((error) => {
-  logger.error("Error in main():", error);
-  process.exit(1);
-});

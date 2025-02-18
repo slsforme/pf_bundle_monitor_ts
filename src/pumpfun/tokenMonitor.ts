@@ -4,27 +4,27 @@ import { DateTime } from 'luxon';
 
 import { logger } from "../../config/appConfig";
 import { cacheExpirationMin } from "../../config/config";
-import { raydiumMigrationMonitor, RaydiumMigrationsMonitor } from "../raydiumMonitor/raydiumMonitor";
+import { raydiumMigrationMonitor, RaydiumMigrationsMonitor } from "../raydium/raydiumMonitor";
 
 export class TokenMonitor {
   private tokens: Map<string, Date> = new Map();
   private lock: Mutex = new Mutex();
   private raydiumMonitor: RaydiumMigrationsMonitor = raydiumMigrationMonitor;
 
-  constructor() { }
+  constructor() {}
 
   async addToken(tokenAddress: string): Promise<void> {
     const release = await this.lock.acquire();
     try {
-      const expirationTime = new Date(Date.now() + cacheExpirationMin * 60000);
+      const expirationTime = new Date(Date.now() + cacheExpirationMin * 60000 );
       this.tokens.set(tokenAddress, expirationTime);
       logger.info(`Started monitoring Token with CA: ${tokenAddress}, going to be deleted at ${DateTime.fromMillis(Date.now() + cacheExpirationMin * 60000, { zone: 'Europe/Paris' })}`);
       // TODO: impl трекер холдеров и unsubscribe в конце
     } finally {
       release();
     }
-    await setTimeout(cacheExpirationMin * 60 * 1000);
-    await this.removeToken(tokenAddress);
+    // await setTimeout(cacheExpirationMin * 60 * 1000);
+    // await this.removeToken(tokenAddress);
   }
 
   async removeToken(tokenAddress: string): Promise<void> {
