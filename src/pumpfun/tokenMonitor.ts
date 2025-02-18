@@ -10,6 +10,7 @@ export class TokenMonitor {
   private tokens: Map<string, Date> = new Map();
   private lock: Mutex = new Mutex();
   private raydiumMonitor: RaydiumMigrationsMonitor = raydiumMigrationMonitor;
+  public expiredTokens: Array<string> = new Array<string>;
 
   constructor() {}
 
@@ -55,6 +56,7 @@ export class TokenMonitor {
           if (await this.raydiumMonitor.checkToken(token)){
             logger.info(`Token ${token} migrated to Raydium, removing from monitoring.`);
             this.tokens.delete(token);
+            this.expiredTokens.push(token);
             continue;
           }
 
@@ -62,6 +64,7 @@ export class TokenMonitor {
           if (expirationTime && expirationTime <= now) {
             logger.info(`Token ${token} expired, removing from monitoring.`);
             this.tokens.delete(token);
+            this.expiredTokens.push(token);
           }
         }
       } finally {

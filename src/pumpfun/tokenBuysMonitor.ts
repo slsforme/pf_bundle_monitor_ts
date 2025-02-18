@@ -1,7 +1,9 @@
 import Client, { CommitmentLevel, SubscribeRequest, SubscribeUpdate } from "@triton-one/yellowstone-grpc";
+
 import { tOutPut } from "./utils/transactionOutput";
 import { grpcUrl, backupGrpcUrl } from "../../config/config";
 import { logger } from "../../config/appConfig";
+import { accountsMonitor } from "../accounts/accountsMonitor";
 
 class TokenBuyMonitor {
   private client: Client;
@@ -31,7 +33,7 @@ class TokenBuyMonitor {
       blocksMeta: {},
       accountsDataSlice: [],
       ping: undefined,
-      commitment: CommitmentLevel.FINALIZED,
+      commitment: CommitmentLevel.CONFIRMED,
     };
 
     const stream = await this.client.subscribe();
@@ -53,9 +55,10 @@ class TokenBuyMonitor {
         const preBalance: number = parseInt(result.meta.preBalances[0]);
         const postBalance: number = parseInt(result.meta.postBalances[0]);
 
-        if (preBalance > postBalance) { // If it's a buy transaction
+        if (preBalance > postBalance) { // If it's a buy tx
           if ((preBalance - postBalance) >= 0.1) {
             const wallet: string = result.message.accountKeys[0];
+            accountsMonitor.addAccountMonitoringTask(wallet);
             // Subscribe to holder updates (to be implemented)
           }
         }
@@ -73,7 +76,7 @@ class TokenBuyMonitor {
         }
       });
     }).catch((reason) => {
-      logger.error("Subscription error:", reason);
+      logger.error("Subscription error:" + reason);
       throw reason;
     });
 
@@ -100,7 +103,6 @@ class TokenBuyMonitor {
   private async checkConnection() {
     try {
       await this.client.ping(1);
-      logger.info(`Connected to ${this.endpoint}`);
     } catch (error) {
       logger.error(`Ping failed for ${this.endpoint}, switching to backup...`);
       this.endpoint = this.endpoint === grpcUrl ? backupGrpcUrl : grpcUrl;

@@ -1,5 +1,4 @@
 import Client, { CommitmentLevel, SubscribeRequest } from "@triton-one/yellowstone-grpc";
-
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -59,21 +58,37 @@ async function addAccountToCache(account: string){ // TODO: impl добавле�
   }
 }
 
+
+
 class AccountsMonitor {
   private client: Client;
   private request: SubscribeRequest;
-  private endpoint: string;
+  private tasks: Promise<void>[] = [];
 
-  constructor(endpoint: string) {
+  constructor(private endpoint: string = grpcUrl) {
     this.endpoint = endpoint;
     this.client = new Client(this.endpoint, undefined, undefined);
+  }
 
+
+  private async checkConnection() {
+    try {
+      await this.client.ping(1);
+    } catch (error) {
+      logger.error(`Ping failed for ${this.endpoint}, switching to backup...`);
+      this.endpoint = this.endpoint === grpcUrl ? backupGrpcUrl : grpcUrl;
+      this.client = new Client(this.endpoint, undefined, undefined);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  private async handleStream(account: string) {
     this.request = {
       accounts: {}, 
       slots: {},
       transactions: {
         "holders": {
-          accountInclude: ["6z9185qv6SHStWzUf6nzxugHir6FzU6uxBHQtxKa2F6f"],
+          accountInclude: [account],
           accountExclude: [],
           accountRequired: []
         }
@@ -83,35 +98,8 @@ class AccountsMonitor {
       blocksMeta: {},
       accountsDataSlice: [],
       ping: undefined,
-      commitment: CommitmentLevel.PROCESSED,
+      commitment: CommitmentLevel.FINALIZED,
     };
-  }
-
-  async startMonitoring() {
-    while (true) {
-      try {
-        await this.checkConnection();
-        await this.handleStream();
-      } catch (error) {
-        logger.error("Stream error, restarting in 1 second...", error);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-    }
-  }
-
-  private async checkConnection() {
-    try {
-      await this.client.ping(1);
-      logger.info(`Connected to ${this.endpoint}`);
-    } catch (error) {
-      logger.error(`Ping failed for ${this.endpoint}, switching to backup...`);
-      this.endpoint = this.endpoint === grpcUrl ? backupGrpcUrl : grpcUrl;
-      this.client = new Client(this.endpoint, undefined, undefined);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
-
-  private async handleStream() {
     const stream = await this.client.subscribe();
 
     const streamClosed = new Promise<void>((resolve, reject) => {
@@ -128,7 +116,7 @@ class AccountsMonitor {
       try {
 
         const result = await tOutPut(data);
-        if (!result) return;
+        console.log(result)
         if ((result.postBalances[0] - result.preBalances[0]) < 0){
           // outflow
           if ((result.preBalances[0] - result.postBalances[0]) / 1_000_000_000 >= 0.1){
@@ -155,18 +143,35 @@ class AccountsMonitor {
         }
       });
     }).catch((reason) => {
-      logger.error("Subscription error:", reason);
+      logger.error("Subscription error: " + reason);
       throw reason;
     });
 
     await streamClosed;
   }
+
+  public async addAccountMonitoringTask(account: string){
+    this.tasks.push(this.handleStream(account));
+  }
+
+  public async monitorTasks(): Promise<void> {
+    while (true) {
+      try {
+        await this.checkConnection();
+        await Promise.allSettled(this.tasks);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (error) {
+        logger.error("Stream error, restarting in 1 second...", error);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+  }
 }
 
+export const accountsMonitor = new AccountsMonitor();
 
 async function main() {
-  const pumpFunMonitor = new AccountsMonitor(grpcUrl);
-  await pumpFunMonitor.startMonitoring();
+  accountsMonitor.addAccountMonitoringTask("GkhpPJiHeK4TuUsp2Rr1LdbAdbThFkMjKemGxhzuwxxp");
 }
 
 main().catch((error) => {
