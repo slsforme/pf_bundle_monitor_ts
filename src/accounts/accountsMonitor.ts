@@ -12,6 +12,7 @@ const whitelistFilePath = path.join(__dirname, '../data/whitelist-wallets.txt');
 
 
 export class BlacklistHandler {
+  private blacklist: Set<string> = new Set<string>;
   private accs: {[key: string]: Set<string>} = {};
   private accs_cache = new Map<string, number>();
 
@@ -44,7 +45,7 @@ export class BlacklistHandler {
   public async addAccountToCache(token: string, account: string){ // TODO: impl добавления каждого ПРОВЕРЯЕМОГО кошелька в кэш
     if (!this.accs_cache.has(account)){ // if account is fresh
         this.accs_cache.set(account, 0);
-        logger.info("Added new account to cache: " + account);
+        // logger.info("Added new account to cache: " + account);
     }
     
     if (!(token in this.accs)){
@@ -54,16 +55,20 @@ export class BlacklistHandler {
     if (this.accs[token].has(account)) {
       const currentCount = this.accs_cache.get(account) ?? 0;
       this.accs_cache.set(account, currentCount + 1);
-      logger.info("Already has this account in cache: " + account);
+      // logger.info("Already has this account in cache: " + account);
     } else {
         this.accs[token].add(account);
     }
   
     for (const [key, value] of this.accs_cache.entries()) {
       if (value >= 3) {
-          logger.info(`Account ${key} got blacklisted.`);
-          if (!(await BlacklistHandler.isWalletOnBlacklist(key))){
-            await BlacklistHandler.addWalletToBlacklist(key);
+        // logger.info("Already got this acc: " + key);
+        if (!(await BlacklistHandler.isWalletOnBlacklist(key))){
+          if(!(this.blacklist.has(key))){
+              this.blacklist.add(key);
+              logger.info(`Account ${key} got blacklisted.`);
+              await BlacklistHandler.addWalletToBlacklist(key);
+            }
           }
       } 
     }
@@ -93,7 +98,7 @@ class AccountsMonitor {
   }
 
   private async handleStream(account: string, token: string) {
-    logger.info(`Monitoring ${account} txs.`)
+    // logger.info(`Monitoring ${account} txs.`)
     this.request = {
       accounts: {}, 
       slots: {},
@@ -133,9 +138,10 @@ class AccountsMonitor {
           // wallet of sender has index '0' (owner)
           // wallet of receiver has index '1'
           if ((result.preBalances[0] - result.postBalances[0]) / 1_000_000_000 >= 0.1){
-            logger.info(`TX INFO: outflow: ${result.message.accountKeys} / signature: ${result.signature} `);
+            // logger.info(`TX INFO: outflow: ${result.message.accountKeys} / signature: ${result.signature} `);
             if (result.message.accountKeys.length < 7)
             {
+              logger.info(`Found outflow tx: ${result.signature} Tracking receiver wallet: ${result.message.accountKeys[1]}`);
               const wallet: string = result.message.accountKeys[1];
               blacklistHandler.addAccountToCache(token, wallet);
             }
@@ -146,9 +152,10 @@ class AccountsMonitor {
           // wallet of sender has index '0' 
           // wallet of receiver has index '1' (owner)
           if ((result.postBalances[0] - result.preBalances[0]) / 1_000_000_000 >= 0.1){
-            logger.info(`TX INFO: inflow: ${result.message.accountKeys} / signature: ${result.signature} `);
+            // logger.info(`TX INFO: inflow: ${result.message.accountKeys} / signature: ${result.signature} `);
             if (result.message.accountKeys.length < 7)
               {
+                logger.info(`Found inflow tx: ${result.signature} Tracking sender wallet: ${result.message.accountKeys[0]}`);
                 const wallet: string = result.message.accountKeys[0];
                 blacklistHandler.addAccountToCache(token, wallet);
               }
@@ -217,13 +224,6 @@ async function main() {
   }
 }
 
-// Вызов main()
-
-
 main();
 
-
-
-
-  
 

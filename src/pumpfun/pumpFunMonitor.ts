@@ -85,7 +85,7 @@ export class PumpFunMonitor {
         const result = await pumpFunTransactionOutput(data);
         if (!result) return;
         const ca = result.meta.postTokenBalances[0]?.mint;
-        logger.info(`New pump.fun token detected: ${ca}`);
+        // logger.info(`New pump.fun token detected: ${ca}`);
         if (ca) {
           this.tokenMonitor.addToken(ca);
           tokenBuyMonitor.addTokenBuyTask(ca);

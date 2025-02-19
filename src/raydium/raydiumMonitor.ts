@@ -90,7 +90,7 @@ export class RaydiumMigrationsMonitor {
 
       const expirationTime = new Date(Date.now() + raydiumCacheExpitationMin * 60000);
       this.tokens.set(tokenAddress, expirationTime);
-      logger.info(`Tracking migrated Token: ${tokenAddress}, going to be deleted at ${DateTime.fromMillis(Date.now() + raydiumCacheExpitationMin * 60000, { zone: 'Europe/Paris' })}`);
+      // logger.info(`Tracking migrated Token: ${tokenAddress}, going to be deleted at ${DateTime.fromMillis(Date.now() + raydiumCacheExpitationMin * 60000, { zone: 'Europe/Paris' })}`);
     } finally {
       release();
     }

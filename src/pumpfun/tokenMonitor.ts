@@ -19,7 +19,7 @@ export class TokenMonitor {
     try {
       const expirationTime = new Date(Date.now() + cacheExpirationMin * 60000 );
       this.tokens.set(tokenAddress, expirationTime);
-      logger.info(`Started monitoring Token with CA: ${tokenAddress}, going to be deleted at ${DateTime.fromMillis(Date.now() + cacheExpirationMin * 60000, { zone: 'Europe/Paris' })}`);
+      // logger.info(`Started monitoring Token with CA: ${tokenAddress}, going to be deleted at ${DateTime.fromMillis(Date.now() + cacheExpirationMin * 60000, { zone: 'Europe/Paris' })}`);
       // TODO: impl трекер холдеров и unsubscribe в конце
     } finally {
       release();
@@ -33,9 +33,9 @@ export class TokenMonitor {
     try {
       if (this.tokens.has(tokenAddress)) {
         this.tokens.delete(tokenAddress);
-        logger.info(`Manually removed token: ${tokenAddress}`);
+        // logger.info(`Manually removed token: ${tokenAddress}`);
       } else {
-        logger.warn(`Tried to remove non-existing token: ${tokenAddress}`);
+        // logger.warn(`Tried to remove non-existing token: ${tokenAddress}`);
       }
     } finally {
       release();
@@ -62,7 +62,7 @@ export class TokenMonitor {
 
           const expirationTime = this.tokens.get(token);
           if (expirationTime && expirationTime <= now) {
-            logger.info(`Token ${token} expired, removing from monitoring.`);
+            // logger.info(`Token ${token} expired, removing from monitoring.`);
             this.tokens.delete(token);
             this.expiredTokens.push(token);
           }
