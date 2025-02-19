@@ -3,7 +3,7 @@ import Client, { CommitmentLevel, SubscribeRequest, SubscribeUpdate } from "@tri
 import { tOutPut } from "./utils/transactionOutput";
 import { grpcUrl, backupGrpcUrl } from "../../config/config";
 import { logger } from "../../config/appConfig";
-import { accountsMonitor } from "../accounts/accountsMonitor";
+import { accountsMonitor, blacklistHandler, BlacklistHandler } from "../accounts/accountsMonitor";
 
 class TokenBuyMonitor {
   private client: Client;
@@ -54,12 +54,13 @@ class TokenBuyMonitor {
         if (!result) return;
         const preBalance: number = parseInt(result.meta.preBalances[0]);
         const postBalance: number = parseInt(result.meta.postBalances[0]);
-
         if (preBalance > postBalance) { // If it's a buy tx
-          if ((preBalance - postBalance) >= 0.1) {
+          if ((preBalance - postBalance) / 1_000_000_000 >= 0.1) {
             const wallet: string = result.message.accountKeys[0];
-            accountsMonitor.addAccountMonitoringTask(wallet);
-            // Subscribe to holder updates (to be implemented)
+            if(!(await BlacklistHandler.isWalletOnBlacklist(wallet))){ // if account not in Blacklist
+              accountsMonitor.addAccountMonitoringTask(wallet, token);
+              blacklistHandler.addAccountToCache(token, wallet);
+            }
           }
         }
       } catch (error) {

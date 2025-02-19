@@ -10,7 +10,12 @@ import { tOutPut } from "./transactionOutput";
 const blacklistFilePath = path.join(__dirname, '../data/blacklist-wallets.txt');
 const whitelistFilePath = path.join(__dirname, '../data/whitelist-wallets.txt');
 
-async function isWalletOnBlacklist(wallet: string): Promise<boolean> {
+
+export class BlacklistHandler {
+  private accs: {[key: string]: Set<string>} = {};
+  private accs_cache = new Map<string, number>();
+
+  public static async isWalletOnBlacklist(wallet: string): Promise<boolean> {
     try {
       const data1 = await fs.promises.readFile(blacklistFilePath, 'utf8');
       const data2 = await fs.promises.readFile(whitelistFilePath, 'utf8');
@@ -22,42 +27,48 @@ async function isWalletOnBlacklist(wallet: string): Promise<boolean> {
       } else {
           return false;
       }
-  } catch (error) {
-      console.error("Ошибка при чтении файлов:", error);
+    } catch (error) {
+      logger.error("Ошибка при чтении файлов:", error);
       return false;
-  }
-}
-
-async function addWalletToBlacklist(wallet: string){
-  try {
-    await fs.promises.appendFile(blacklistFilePath, wallet + '\n', "utf8");
-  } catch (error) {
-    logger.error("Error occurred while wallet to blacklist file: " + error)
-  }
-}
-
-const accs: Set<string> = new Set<string>();
-const accs_cache = new Map<string, number>();
-
-async function addAccountToCache(account: string){ // TODO: impl добавления каждого ПРОВЕРЯЕМОГО кошелька в кэш
-  if (!(account in accs_cache)){
-      accs_cache[account] = 0;
-  }
-
-  if (accs.has(account)) {
-      accs_cache[account] += 1;
-  } else {
-    accs.add(account);
-  }
-
-  for (const [key, value] of accs_cache) {
-    if (value >= 3) {
-      logger.info(`Account ${key} got blacklisted. Going through txs.`)
-      // TODO: tracking of new wallet's sol
     }
   }
-}
 
+  public static async addWalletToBlacklist(wallet: string){
+    try {
+      await fs.promises.appendFile(blacklistFilePath, wallet + '\n', "utf8");
+    } catch (error) {
+      logger.error("Error occurred while wallet to blacklist file: " + error)
+    }
+  }
+
+  public async addAccountToCache(token: string, account: string){ // TODO: impl добавления каждого ПРОВЕРЯЕМОГО кошелька в кэш
+    if (!this.accs_cache.has(account)){ // if account is fresh
+        this.accs_cache.set(account, 0);
+        logger.info("Added new account to cache: " + account);
+    }
+    
+    if (!(token in this.accs)){
+        this.accs[token] = new Set<string>;
+    }
+
+    if (this.accs[token].has(account)) {
+      const currentCount = this.accs_cache.get(account) ?? 0;
+      this.accs_cache.set(account, currentCount + 1);
+      logger.info("Already has this account in cache: " + account);
+    } else {
+        this.accs[token].add(account);
+    }
+  
+    for (const [key, value] of this.accs_cache.entries()) {
+      if (value >= 3) {
+          logger.info(`Account ${key} got blacklisted.`);
+          if (!(await BlacklistHandler.isWalletOnBlacklist(key))){
+            await BlacklistHandler.addWalletToBlacklist(key);
+          }
+      } 
+    }
+  } 
+}
 
 
 class AccountsMonitor {
@@ -70,7 +81,6 @@ class AccountsMonitor {
     this.client = new Client(this.endpoint, undefined, undefined);
   }
 
-
   private async checkConnection() {
     try {
       await this.client.ping(1);
@@ -82,7 +92,8 @@ class AccountsMonitor {
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 
-  private async handleStream(account: string) {
+  private async handleStream(account: string, token: string) {
+    logger.info(`Monitoring ${account} txs.`)
     this.request = {
       accounts: {}, 
       slots: {},
@@ -116,19 +127,33 @@ class AccountsMonitor {
       try {
 
         const result = await tOutPut(data);
-        console.log(result)
+        if (!result) return;
         if ((result.postBalances[0] - result.preBalances[0]) < 0){
           // outflow
+          // wallet of sender has index '0' (owner)
+          // wallet of receiver has index '1'
           if ((result.preBalances[0] - result.postBalances[0]) / 1_000_000_000 >= 0.1){
-            // следим за кошельком, которому скинули sol
+            logger.info(`TX INFO: outflow: ${result.message.accountKeys} / signature: ${result.signature} `);
+            if (result.message.accountKeys.length < 7)
+            {
+              const wallet: string = result.message.accountKeys[1];
+              blacklistHandler.addAccountToCache(token, wallet);
+            }
+
           }
         } else {
           // inflow
+          // wallet of sender has index '0' 
+          // wallet of receiver has index '1' (owner)
           if ((result.postBalances[0] - result.preBalances[0]) / 1_000_000_000 >= 0.1){
-            // добавляем кошелёк в set
+            logger.info(`TX INFO: inflow: ${result.message.accountKeys} / signature: ${result.signature} `);
+            if (result.message.accountKeys.length < 7)
+              {
+                const wallet: string = result.message.accountKeys[0];
+                blacklistHandler.addAccountToCache(token, wallet);
+              }
           }
         }
-
       } catch (error) {
         logger.error("Error occurred: " + error);
       }
@@ -150,8 +175,8 @@ class AccountsMonitor {
     await streamClosed;
   }
 
-  public async addAccountMonitoringTask(account: string){
-    this.tasks.push(this.handleStream(account));
+  public async addAccountMonitoringTask(account: string, token: string){
+    this.tasks.push(this.handleStream(account, token));
   }
 
   public async monitorTasks(): Promise<void> {
@@ -169,15 +194,36 @@ class AccountsMonitor {
 }
 
 export const accountsMonitor = new AccountsMonitor();
+export const blacklistHandler = new BlacklistHandler();
+
+const testAccount = "GkhpPJiHeK4TuUsp2Rr1LdbAdbThFkMjKemGxhzuwxxp";
+const testToken = "EXAMPLE_TOKEN";
+
 
 async function main() {
-  accountsMonitor.addAccountMonitoringTask("GkhpPJiHeK4TuUsp2Rr1LdbAdbThFkMjKemGxhzuwxxp");
+  try {
+      
+      /*
+      accountsMonitor.monitorTasks();
+      
+      accountsMonitor.addAccountMonitoringTask(testAccount, testToken);
+      accountsMonitor.addAccountMonitoringTask(testAccount, testToken);
+      accountsMonitor.addAccountMonitoringTask(testAccount, testToken);
+      */
+    
+  } catch (error) {
+      logger.error("Critical error in main function:", error);
+      process.exit(1); 
+  }
 }
 
-main().catch((error) => {
-  logger.error("Error in main():" + error);
-  process.exit(1);
-});
+// Вызов main()
+
+
+main();
+
+
+
 
   
 

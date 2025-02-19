@@ -1,12 +1,14 @@
 import Client, { CommitmentLevel, SubscribeRequest, SubscribeUpdate } from "@triton-one/yellowstone-grpc";
+import path from 'path';
 
 import { pumpFunTransactionOutput } from "./utils/pumpFunTransactionOutput";
 import { grpcUrl, backupGrpcUrl } from "../../config/config";
 import { logger } from "../../config/appConfig";
-import { tokenMonitor, TokenMonitor } from "./tokenMonitor";
+import { TokenMonitor } from "./tokenMonitor";
 import { tokenBuyMonitor } from "./tokenBuysMonitor";
 
 const PUMPFUN = "TSLvdd1pWpHVjahSpsvCXUbgwsL3JAcvokwaKt1eokM";
+
 
 export class PumpFunMonitor {
   private client: Client;
