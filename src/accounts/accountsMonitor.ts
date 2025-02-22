@@ -1,4 +1,4 @@
-import Client, { CommitmentLevel, SubscribeRequest } from "@triton-one/yellowstone-grpc";
+import Client, { CommitmentLevel, SubscribeRequest } from "@triton-one/yellowstone-grpc"
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -14,7 +14,12 @@ const whitelistFilePath = path.join(__dirname, '../data/whitelist-wallets.txt');
 export class BlacklistHandler {
   private blacklist: Set<string> = new Set<string>;
   private accs: {[key: string]: Set<string>} = {};
-  private accs_cache = new Map<string, number>();
+  private accsCache = new Map<string, number>();
+  private blacklistTracker = new Map<string, Map<string, Array<string>>>();
+  private matchMap = new Map<string, { count: number; keyAccount: string; token: string; relationalAccounts: Array<string>, allRelations: Array<Array<string>> }>();
+  private processedKeys: Set<string> = new Set();
+
+
 
   public static async isWalletOnBlacklist(wallet: string): Promise<boolean> {
     try {
@@ -42,9 +47,109 @@ export class BlacklistHandler {
     }
   }
 
-  public async addAccountToCache(token: string, account: string){ // TODO: impl добавления каждого ПРОВЕРЯЕМОГО кошелька в кэш
-    if (!this.accs_cache.has(account)){ // if account is fresh
-        this.accs_cache.set(account, 0);
+  
+public async trackMatchMapChanges() {
+    const printedWallets = new Set<string>();
+
+    setInterval(() => {
+      for (const [key, value] of this.matchMap.entries()) {
+        if (value.count >= 3 && !printedWallets.has(key)) { 
+          logger.info(`🔹 Found new relations for blacklist.
+            🔸 Account: ${key}
+            🔸 Совпадений: ${value.count}
+            🔸 KeyAccount: ${value.keyAccount}
+            🔸 Token Mint Address: ${value.token}
+            🔸 Relational Accounts: ${value.relationalAccounts.join(', ')}
+            🔸 All Relations:
+            ${value.allRelations.map((relation, index) => `  [${index + 1}] ${relation.join(' -> ')}`).join('\n')}
+            --------------------------`);            
+            // console.log("🔹 Found new relations for blacklist.");
+            // console.log(`🔸 Account: ${key}`); 
+            // console.log(`  🔸 Совпадений: ${value.count}`);
+            // console.log(`  🔸 KeyAccount: ${value.keyAccount}`);
+            // console.log(`  🔸 Token Mint Address: ${value.token}`);
+            // console.log(`  🔸 Relational Accounts: ${value.relationalAccounts.join(', ')}`);
+
+            // console.log(`  🔸 All Relations:`);
+            // value.allRelations.forEach((relation: string[], index: number) => {
+            //     console.log(`    [${index + 1}] ${relation.join(' -> ')}`);
+            // });
+
+            // console.log('--------------------------');
+            printedWallets.add(key);
+        }
+    }
+  }, 1000);
+}
+ 
+
+  
+  public async addAccountToBlacklistTracker(token: string, keyAccount: string, account: string){
+    // adding data
+    if (!(this.blacklistTracker.has(token))) { // if this token doesn't exists 
+      const dict = new Map<string, Array<string>>(); // creating new array
+      dict.set(keyAccount, [account])
+      this.blacklistTracker.set(token, dict);
+    } else { // if token already created
+      if (this.blacklistTracker.get(token).get(keyAccount)){ // double check if we have keyAccount in tracker already
+         if (this.blacklistTracker.get(token).get(keyAccount).includes(keyAccount)) { // if we already have this wallet in tracker 
+            return;
+         } else {
+          this.blacklistTracker.get(token).get(keyAccount).push(account); // adds account to tracker
+         }
+      } else { // if it's new keyAccount 
+        this.blacklistTracker.get(token).set(keyAccount, [account]);
+      }
+    }
+
+    // searching for bundles 
+    this.blacklistTracker.forEach((accountsMap) => {
+      const keyAccounts = Array.from(accountsMap.keys());
+      for (let i = 0; i < keyAccounts.length; i++){
+
+        const accounts = accountsMap.get(keyAccounts[i]);
+        if (!accounts) continue;
+
+        // going through every accounts relation in one specific token
+        for (let j = 0; j < keyAccounts.length; j++) { 
+          if (i === j) continue;
+
+          const nextAccounts: string[] = accountsMap.get(keyAccounts[j]);
+          const data: string[] = [...[keyAccounts[j]], ...nextAccounts];
+          if (!nextAccounts) continue;
+          
+          accounts.forEach((account: string) => {
+          if (!this.matchMap.has(account)) {
+              this.matchMap.set(account, {
+                count: 0,
+                keyAccount: "",
+                token: "",
+                relationalAccounts: [],
+                allRelations: [],
+              });
+          }
+
+          if(nextAccounts.includes(account)){
+            if(this.matchMap.get(account).count < 3){
+              this.matchMap.get(account).count += 1;
+              this.matchMap.get(account).allRelations.push([keyAccounts[j], ...nextAccounts]);
+              if (this.matchMap.get(account).count === 3){ 
+                this.matchMap.get(account).keyAccount = keyAccounts[i];
+                this.matchMap.get(account).relationalAccounts = nextAccounts;
+                this.matchMap.get(account).token = token;
+              }
+            } 
+          } 
+          });
+        }
+      }
+    });
+  }
+  
+
+  public async addAccountToCache(token: string, account: string){ 
+    if (!this.accsCache.has(account)){ // if account is fresh
+        this.accsCache.set(account, 0);
         // logger.info("Added new account to cache: " + account);
     }
     
@@ -53,14 +158,14 @@ export class BlacklistHandler {
     }
 
     if (this.accs[token].has(account)) {
-      const currentCount = this.accs_cache.get(account) ?? 0;
-      this.accs_cache.set(account, currentCount + 1);
+      const currentCount = this.accsCache.get(account) ?? 0;
+      this.accsCache.set(account, currentCount + 1);
       // logger.info("Already has this account in cache: " + account);
     } else {
         this.accs[token].add(account);
     }
   
-    for (const [key, value] of this.accs_cache.entries()) {
+    for (const [key, value] of this.accsCache.entries()) {
       if (value >= 3) {
         // logger.info("Already got this acc: " + key);
         if (!(await BlacklistHandler.isWalletOnBlacklist(key))){
@@ -98,7 +203,8 @@ class AccountsMonitor {
   }
 
   private async handleStream(account: string, token: string) {
-    // logger.info(`Monitoring ${account} txs.`)
+    
+    logger.info(`Tracking ${account} txs.`)
     this.request = {
       accounts: {}, 
       slots: {},
@@ -130,7 +236,6 @@ class AccountsMonitor {
 
     stream.on("data", async (data) => {
       try {
-
         const result = await tOutPut(data);
         if (!result) return;
         if ((result.postBalances[0] - result.preBalances[0]) < 0){
@@ -141,11 +246,17 @@ class AccountsMonitor {
             // logger.info(`TX INFO: outflow: ${result.message.accountKeys} / signature: ${result.signature} `);
             if (result.message.accountKeys.length < 7)
             {
-              logger.info(`Found outflow tx: ${result.signature} Tracking receiver wallet: ${result.message.accountKeys[1]}`);
-              const wallet: string = result.message.accountKeys[1];
-              blacklistHandler.addAccountToCache(token, wallet);
+              let wallet: string = "";
+              if (result.message.accountKeys[0] === account)
+                {
+                  wallet = result.message.accountKeys[1];
+                } else {
+                  wallet = result.message.accountKeys[0];
+                }
+                blacklistHandler.addAccountToCache(token, wallet);
+                logger.info(`Found outflow tx: ${result.signature} by ${account}\n Tracking receiver wallet: ${wallet}`);
+                blacklistHandler.addAccountToBlacklistTracker(token, account, wallet);
             }
-
           }
         } else {
           // inflow
@@ -155,9 +266,16 @@ class AccountsMonitor {
             // logger.info(`TX INFO: inflow: ${result.message.accountKeys} / signature: ${result.signature} `);
             if (result.message.accountKeys.length < 7)
               {
-                logger.info(`Found inflow tx: ${result.signature} Tracking sender wallet: ${result.message.accountKeys[0]}`);
-                const wallet: string = result.message.accountKeys[0];
+                let wallet: string = "";
+                if (result.message.accountKeys[0] === account)
+                  {
+                    wallet = result.message.accountKeys[1];
+                  } else {
+                    wallet = result.message.accountKeys[0];
+                  }
+                logger.info(`Found inflow tx: ${result.signature} by ${account}\n Tracking sender wallet: ${wallet}`);
                 blacklistHandler.addAccountToCache(token, wallet);
+                blacklistHandler.addAccountToBlacklistTracker(token, account, wallet);
               }
           }
         }
@@ -203,27 +321,27 @@ class AccountsMonitor {
 export const accountsMonitor = new AccountsMonitor();
 export const blacklistHandler = new BlacklistHandler();
 
-const testAccount = "GkhpPJiHeK4TuUsp2Rr1LdbAdbThFkMjKemGxhzuwxxp";
-const testToken = "EXAMPLE_TOKEN";
 
 
-async function main() {
-  try {
-      
-      /*
-      accountsMonitor.monitorTasks();
-      
-      accountsMonitor.addAccountMonitoringTask(testAccount, testToken);
-      accountsMonitor.addAccountMonitoringTask(testAccount, testToken);
-      accountsMonitor.addAccountMonitoringTask(testAccount, testToken);
-      */
-    
-  } catch (error) {
-      logger.error("Critical error in main function:", error);
-      process.exit(1); 
-  }
-}
 
-main();
+// async function main() {
+//   const blacklistHandler = new BlacklistHandler(); // Создаем экземпляр класса
+//   blacklistHandler.trackMatchMapChanges();
 
+//   // Добавляем аккаунты в blacklistTracker для токена "tokenA"
+//   await blacklistHandler.addAccountToBlacklistTracker("tokenA", "keyAccount1", "account1");
+//   await blacklistHandler.addAccountToBlacklistTracker("tokenA", "keyAccount1", "account2");
+//   await blacklistHandler.addAccountToBlacklistTracker("tokenA", "keyAccount2", "account2");
+//   await blacklistHandler.addAccountToBlacklistTracker("tokenA", "keyAccount2", "account3");
+//   await blacklistHandler.addAccountToBlacklistTracker("tokenA", "keyAccount3", "account3");
+//   await blacklistHandler.addAccountToBlacklistTracker("tokenA", "keyAccount3", "account1");
+
+//   // Добавляем аккаунты для другого токена "tokenB"
+//   await blacklistHandler.addAccountToBlacklistTracker("tokenB", "keyAccount4", "account4");
+//   await blacklistHandler.addAccountToBlacklistTracker("tokenB", "keyAccount5", "account5");
+//   await blacklistHandler.addAccountToBlacklistTracker("tokenB", "keyAccount5", "account6");
+
+// }
+
+// main();
 

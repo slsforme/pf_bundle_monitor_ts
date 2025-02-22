@@ -84,7 +84,7 @@ export class RaydiumMigrationsMonitor {
     const release = await this.lock.acquire();
     try {
       if (this.tokens.has(tokenAddress)) {
-        logger.info(`Token ${tokenAddress} is already being tracked.`);
+        // logger.info(`Token ${tokenAddress} is already being tracked.`);
         return;  // Если токен уже существует, выходим
       }
 
@@ -103,7 +103,7 @@ export class RaydiumMigrationsMonitor {
     try {
       if (this.tokens.has(tokenAddress)) {
         this.tokens.delete(tokenAddress);
-        logger.info(`Manually removed token from Raydium Monitor: ${tokenAddress}`);
+        // logger.info(`Manually removed token from Raydium Monitor: ${tokenAddress}`);
       } else {
         logger.warn(`Tried to remove non-existing token from Raydium Monitor: ${tokenAddress}`);
       }
