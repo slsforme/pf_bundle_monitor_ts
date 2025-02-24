@@ -1,24 +1,19 @@
 import Client, { CommitmentLevel, SubscribeRequest, SubscribeUpdate } from "@triton-one/yellowstone-grpc";
-import path from 'path';
 
 import { pumpFunTransactionOutput } from "./utils/pumpFunTransactionOutput";
 import { grpcUrl, backupGrpcUrl } from "../../config/config";
-import { logger } from "../../config/appConfig";
+import { logger, client, backupClient } from "../../config/appConfig";
 import { TokenMonitor } from "./tokenMonitor";
-import { tokenBuyMonitor } from "./tokenBuysMonitor";
-
-const PUMPFUN = "TSLvdd1pWpHVjahSpsvCXUbgwsL3JAcvokwaKt1eokM";
-
 
 export class PumpFunMonitor {
-  private client: Client;
   private request: SubscribeRequest;
+  private client: Client;
   private tokenMonitor: TokenMonitor;
+  private readonly pumpFunProgram: string = "TSLvdd1pWpHVjahSpsvCXUbgwsL3JAcvokwaKt1eokM";
 
-  constructor(private endpoint: string = grpcUrl, tokenMonitor: TokenMonitor) {
-    this.endpoint = endpoint;
-    this.client = new Client(this.endpoint, undefined, undefined);
+  constructor(tokenMonitor: TokenMonitor) {
     this.tokenMonitor = tokenMonitor;  
+    this.client = client;
     this.tokenMonitor.monitorTokens();  
 
     this.request = {
@@ -29,7 +24,7 @@ export class PumpFunMonitor {
           vote: false,
           failed: false,
           signature: undefined,
-          accountInclude: [PUMPFUN],
+          accountInclude: [this.pumpFunProgram],
           accountExclude: [],
           accountRequired: [],
         },
@@ -56,13 +51,13 @@ export class PumpFunMonitor {
   }
 
   private async checkConnection() {
+    const endpoint = this.client === client ? grpcUrl : backupGrpcUrl;
     try {
       await this.client.ping(1);
-      logger.info(`Connected to ${this.endpoint}`);
+      logger.info(`Connected to ${endpoint}`);
     } catch (error) {
-      logger.error(`Ping failed for ${this.endpoint}, switching to backup...`);
-      this.endpoint = this.endpoint === grpcUrl ? backupGrpcUrl : grpcUrl;
-      this.client = new Client(this.endpoint, undefined, undefined);
+      logger.error(`Ping failed for ${endpoint}, switching to backup...`);
+      this.client = this.client === client ? backupClient : client;
     }
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
@@ -84,11 +79,10 @@ export class PumpFunMonitor {
       try {
         const result = await pumpFunTransactionOutput(data);
         if (!result) return;
-        const ca = result.meta.postTokenBalances[0]?.mint;
-        logger.info(`New pump.fun token detected: ${ca}`);
-        if (ca) {
-          this.tokenMonitor.addToken(ca);
-          tokenBuyMonitor.addTokenBuyTask(ca);
+        const mindAddress = result.meta.postTokenBalances[0]?.mint;
+        // logger.info(`New pump.fun token detected: ${ca}`);
+        if (mindAddress) {
+          this.tokenMonitor.addToken(mindAddress);
         }
       } catch (error) {
         logger.error("Error occurred: " + error);
@@ -104,7 +98,7 @@ export class PumpFunMonitor {
         }
       });
     }).catch((reason) => {
-      logger.error("Subscription error:", reason);
+      logger.error("Subscription error: " + reason);
       throw reason;
     });
 

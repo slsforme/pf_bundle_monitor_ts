@@ -2,7 +2,7 @@ import Client, { CommitmentLevel, SubscribeRequest, SubscribeUpdate } from "@tri
 
 import { tOutPut } from "./utils/transactionOutput";
 import { grpcUrl, backupGrpcUrl } from "../../config/config";
-import { logger } from "../../config/appConfig";
+import { backupClient, client, logger } from "../../config/appConfig";
 import { accountsMonitor, blacklistHandler, BlacklistHandler } from "../accounts/accountsMonitor";
 
 class TokenBuyMonitor {
@@ -11,10 +11,10 @@ class TokenBuyMonitor {
 
   constructor(private endpoint: string = grpcUrl) {
     this.endpoint = endpoint;
-    this.client = new Client(this.endpoint, undefined, undefined);
+    this.client = client;
   }
 
-  private async handleStream(token: string): Promise<void> {
+  private async handleStream(mintAddress: string, stream: any): Promise<void> {
     const request: SubscribeRequest = {
       accounts: {},
       slots: {},
@@ -23,7 +23,7 @@ class TokenBuyMonitor {
           vote: false,
           failed: false,
           signature: undefined,
-          accountInclude: [token],
+          accountInclude: [mintAddress],
           accountExclude: [],
           accountRequired: [],
         },
@@ -35,9 +35,7 @@ class TokenBuyMonitor {
       ping: undefined,
       commitment: CommitmentLevel.CONFIRMED,
     };
-
-    const stream = await this.client.subscribe();
-
+    
     const streamClosed = new Promise<void>((resolve, reject) => {
       stream.on("error", (error) => {
         logger.error("Error occurred: " + error);
@@ -52,15 +50,13 @@ class TokenBuyMonitor {
       try {
         const result = await tOutPut(data);
         if (!result) return;
-        const preBalance: number = parseInt(result.meta.preBalances[0]);
-        const postBalance: number = parseInt(result.meta.postBalances[0]);
-        if (preBalance > postBalance) { // If it's a buy tx
-          if ((preBalance - postBalance) / 1_000_000_000 >= 0.1) {
+        if (result.preBalance > result.postBalance) { // If it's a buy tx
+          if ((result.preBalance - result.postBalance) / 1_000_000_000 >= 0.1) {
             const wallet: string = result.message.accountKeys[0];
-            logger.info(`Token ${token} was bought for ${(preBalance - postBalance) / 1_000_000_000} SOL by ${wallet}`);
+            // logger.info(`Token ${token} was bought for ${(preBalance - postBalance) / 1_000_000_000} SOL by ${wallet}`);
             if(!(await BlacklistHandler.isWalletOnBlacklist(wallet))){ // if account not in Blacklist
-              accountsMonitor.addAccountMonitoringTask(wallet, token);
-              blacklistHandler.addAccountToCache(token, wallet);
+              accountsMonitor.addAccountMonitoringTask(wallet, mintAddress);
+              blacklistHandler.addAccountToCache(mintAddress, wallet);
             }
           }
         }
@@ -78,15 +74,15 @@ class TokenBuyMonitor {
         }
       });
     }).catch((reason) => {
-      logger.error("Subscription error:" + reason);
+      logger.error("Subscription error: " + reason);
       throw reason;
     });
 
     await streamClosed;
   }
 
-  public async addTokenBuyTask(token: string): Promise<void> {
-    this.tasks.push(this.handleStream(token));
+  public async addTokenBuyTask(mintAddress: string, stream: any): Promise<void> {
+    this.tasks.push(this.handleStream(mintAddress, stream));
   }
 
   public async monitorTasks(): Promise<void> {
@@ -106,13 +102,10 @@ class TokenBuyMonitor {
     try {
       await this.client.ping(1);
     } catch (error) {
-      logger.error(`Ping failed for ${this.endpoint}, switching to backup...`);
-      this.endpoint = this.endpoint === grpcUrl ? backupGrpcUrl : grpcUrl;
-      this.client = new Client(this.endpoint, undefined, undefined);
+      this.client = this.client === client ? backupClient : client;
     }
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
-
 }
 
 export const tokenBuyMonitor = new TokenBuyMonitor();

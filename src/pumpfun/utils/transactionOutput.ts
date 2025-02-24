@@ -11,9 +11,13 @@ export async function tOutPut(data){
          return decodeTransact(t)
     });
     const meta = dataTx?.meta
+    const preBalance: number = parseInt(meta.preBalances[0]);
+    const postBalance: number = parseInt(meta.postBalances[0]);
     return {
         dataTx,
         meta,
+        postBalance,
+        preBalance,
         message:{ accountKeys },
     };
 }
