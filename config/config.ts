@@ -17,7 +17,6 @@ export const backupGrpcUrl: string = config.source?.backup_grpc_url || "";
 
 export const cacheExpirationMin: number = config.numbers?.cache_expiration_min || 0;
 export const raydiumCacheExpitationMin: number = config.numbers?.raydium_cache_expitation_min || 0;
-export const walletIterationCount: number = config.numbers?.wallet_iteration_count || 0;
 
 export const pumpProgram: string = config.pumpfun?.pump_program || "";
 export const raydiumProgram: string = config.pumpfun?.raydiumProgram || "";

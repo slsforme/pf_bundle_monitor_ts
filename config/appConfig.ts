@@ -1,25 +1,6 @@
-import pino from "pino";
-
-// export const logger = pino({
-//   level: "info",
-//   transport: {
-//     target: "pino-pretty",
-//     options: {
-//       colorize: true, 
-//       translateTime: "yyyy-mm-dd HH:MM:ss",
-//       ignore: "pid,hostname",  
-//     },
-//   },
-//   base: { pid: false }, 
-// })
-
-import winston, { format } from "winston";
-import { DateTime } from 'luxon';
-
-
-const getLuxonTimestamp = () => {
-  return `${DateTime.now().setZone('Europe/Paris').toFormat('yyyy-MM-dd HH:mm:ss.SSS')}`;
-};
+import Client from "@triton-one/yellowstone-grpc";
+import winston from "winston";
+import { backupGrpcUrl, grpcUrl } from "./config";
 
 export const logger = winston.createLogger({
   level: 'info',
@@ -40,6 +21,8 @@ export const logger = winston.createLogger({
   ],
 });
 
+export const client: Client  = new Client(grpcUrl, undefined, undefined);
+export const backupClient: Client = new Client(backupGrpcUrl, undefined, undefined);
 
 
 
