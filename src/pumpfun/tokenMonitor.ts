@@ -41,7 +41,7 @@ export class TokenMonitor {
       if (this.tokens.has(mintAddress)) {
         this.tokens.delete(mintAddress);
         await this.deleteAndDestroyStream(mintAddress);
-        // logger.info(`Manually removed token: ${tokenAddress}`);
+        logger.info(`Manually removed token: ${mintAddress}`);
       }
     } finally {
       release();

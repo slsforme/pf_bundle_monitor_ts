@@ -80,7 +80,7 @@ export class PumpFunMonitor {
         const result = await pumpFunTransactionOutput(data);
         if (!result) return;
         const mindAddress = result.meta.postTokenBalances[0]?.mint;
-        // logger.info(`New pump.fun token detected: ${ca}`);
+        logger.info(`New pump.fun token detected: ${mindAddress}`);
         if (mindAddress) {
           this.tokenMonitor.addToken(mindAddress);
         }

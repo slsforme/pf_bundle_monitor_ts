@@ -53,7 +53,7 @@ class TokenBuyMonitor {
         if (result.preBalance > result.postBalance) { // If it's a buy tx
           if ((result.preBalance - result.postBalance) / 1_000_000_000 >= 0.1) {
             const wallet: string = result.message.accountKeys[0];
-            // logger.info(`Token ${token} was bought for ${(preBalance - postBalance) / 1_000_000_000} SOL by ${wallet}`);
+            logger.info(`Token ${mintAddress} was bought for ${(result.preBalance - result.postBalance) / 1_000_000_000} SOL by ${wallet}`);
             if(!(await BlacklistHandler.isWalletOnBlacklist(wallet))){ // if account not in Blacklist
               accountsMonitor.addAccountMonitoringTask(wallet, mintAddress);
               blacklistHandler.addAccountToCache(mintAddress, wallet);

@@ -7,7 +7,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { DateTime } from 'luxon';
 
 import { tOutPut } from "./transactionOutput";
-import { searchForInitialize2 } from "./logTXN";
+import { searchForInitialize2 } from "./utils/logTXN";
 import { logger } from "../../config/appConfig";
 import { grpcUrl, backupGrpcUrl, raydiumCacheExpitationMin } from "../../config/config";
 
