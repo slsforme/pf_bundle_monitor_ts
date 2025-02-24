@@ -3,16 +3,13 @@ import Client, {
     SubscribeRequest
 } from "@triton-one/yellowstone-grpc";
 import { Mutex } from "async-mutex"; 
-import { DateTime } from 'luxon';
 import { setTimeout as sleep } from "node:timers/promises";
+import { DateTime } from 'luxon';
 
 import { tOutPut } from "./transactionOutput";
 import { searchForInitialize2 } from "./logTXN";
 import { logger } from "../../config/appConfig";
 import { grpcUrl, backupGrpcUrl, raydiumCacheExpitationMin } from "../../config/config";
-
-
-const MIGRATION = '39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg';
 
 export class RaydiumMigrationsMonitor {
   private client: Client;
@@ -20,8 +17,9 @@ export class RaydiumMigrationsMonitor {
   private endpoint: string;
   private lock: Mutex = new Mutex();
   private tokens: Map<string, Date> = new Map();
+  private readonly raydiumMigrationProgram: string = "39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg"
 
-  constructor(endpoint: string) {
+  constructor(endpoint: string = grpcUrl) {
     this.endpoint = endpoint;
     this.client = new Client(this.endpoint, undefined, undefined);
 
@@ -33,7 +31,7 @@ export class RaydiumMigrationsMonitor {
           vote: false,
           failed: false,
           signature: undefined,
-          accountInclude: [MIGRATION], 
+          accountInclude: [this.raydiumMigrationProgram], 
           accountExclude: [],
           accountRequired: [],
         },
@@ -71,8 +69,8 @@ export class RaydiumMigrationsMonitor {
   }
 
 
-  async checkToken(ca: string): Promise<boolean>{
-    if (this.tokens.has(ca)){
+  async checkToken(mintAddress: string): Promise<boolean>{
+    if (this.tokens.has(mintAddress)){
       return true;
     } else 
     {
@@ -80,32 +78,31 @@ export class RaydiumMigrationsMonitor {
     }
   } 
 
-  private async addToken(tokenAddress: string): Promise<void> {
+  private async addToken(mintAddress: string): Promise<void> {
     const release = await this.lock.acquire();
     try {
-      if (this.tokens.has(tokenAddress)) {
-        // logger.info(`Token ${tokenAddress} is already being tracked.`);
-        return;  // Если токен уже существует, выходим
+      if (this.tokens.has(mintAddress)) {
+        return;  
       }
 
       const expirationTime = new Date(Date.now() + raydiumCacheExpitationMin * 60000);
-      this.tokens.set(tokenAddress, expirationTime);
-      // logger.info(`Tracking migrated Token: ${tokenAddress}, going to be deleted at ${DateTime.fromMillis(Date.now() + raydiumCacheExpitationMin * 60000, { zone: 'Europe/Paris' })}`);
+      this.tokens.set(mintAddress, expirationTime);
+      logger.info(`Tracking migrated Token: ${mintAddress}, going to be deleted at ${DateTime.fromMillis(Date.now() + raydiumCacheExpitationMin * 60000, { zone: 'Europe/Paris' })}`);
     } finally {
       release();
     }
     await sleep(raydiumCacheExpitationMin * 60 * 1000);
-    await this.removeToken(tokenAddress);
+    await this.removeToken(mintAddress);
   }
 
-  async removeToken(tokenAddress: string): Promise<void> {
+  async removeToken(mintAddress: string): Promise<void> {
     const release = await this.lock.acquire();
     try {
-      if (this.tokens.has(tokenAddress)) {
-        this.tokens.delete(tokenAddress);
-        // logger.info(`Manually removed token from Raydium Monitor: ${tokenAddress}`);
+      if (this.tokens.has(mintAddress)) {
+        this.tokens.delete(mintAddress);
+        logger.info(`Manually removed token from Raydium Monitor: ${mintAddress}`);
       } else {
-        logger.warn(`Tried to remove non-existing token from Raydium Monitor: ${tokenAddress}`);
+        logger.warn(`Tried to remove non-existing token from Raydium Monitor: ${mintAddress}`);
       }
     } finally {
       release();
@@ -130,17 +127,13 @@ export class RaydiumMigrationsMonitor {
         const result = await tOutPut(data);
         const transaction = searchForInitialize2(result)
         if(!transaction) return;
-        const pf_ca = transaction.message.accountKeys.filter(key => key.includes('pump'))[0];
-        if (pf_ca && !this.tokens.has(pf_ca)) {
-          await this.addToken(pf_ca);
+        const pumpFunMintAddress = transaction.message.accountKeys.filter(key => key.includes('pump'))[0];
+        if (pumpFunMintAddress && !this.tokens.has(pumpFunMintAddress)) {
+          await this.addToken(pumpFunMintAddress);
         }
         
       } catch (error) {
-        if (error instanceof TypeError) {
-          // pass
-        } else {
-          logger.error("Error occurred: ", error);
-        }
+        logger.error("Error occurred: ", error);
       }
     });
 
@@ -161,15 +154,5 @@ export class RaydiumMigrationsMonitor {
   }
 }
 
-async function main() {
-  const raydiumMigrationMonitor = new RaydiumMigrationsMonitor(grpcUrl);
-  raydiumMigrationMonitor.startMonitoring();
-}
-
-main().catch((error) => {
-  logger.error("Error in main():", error);
-  process.exit(1);
-});
-
-export const raydiumMigrationMonitor = new RaydiumMigrationsMonitor(grpcUrl);
+export const raydiumMigrationMonitor = new RaydiumMigrationsMonitor();
 
