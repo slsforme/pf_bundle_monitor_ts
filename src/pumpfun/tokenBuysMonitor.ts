@@ -2,7 +2,7 @@ import Client, { CommitmentLevel, SubscribeRequest, SubscribeUpdate } from "@tri
 
 import { tOutPut } from "./utils/transactionOutput";
 import { grpcUrl, backupGrpcUrl } from "../../config/config";
-import { backupClient, client, logger } from "../../config/appConfig";
+import { backupClient, client, asyncLogger } from "../../config/appConfig";
 import { accountsMonitor, blacklistHandler, BlacklistHandler } from "../accounts/accountsMonitor";
 
 class TokenBuyMonitor {
@@ -38,7 +38,7 @@ class TokenBuyMonitor {
     
     const streamClosed = new Promise<void>((resolve, reject) => {
       stream.on("error", (error) => {
-        logger.error("Error occurred: " + error);
+        asyncLogger.error("Error occurred: " + error);
         reject(error);
         stream.end();
       });
@@ -53,7 +53,7 @@ class TokenBuyMonitor {
         if (result.preBalance > result.postBalance) { // If it's a buy tx
           if ((result.preBalance - result.postBalance) / 1_000_000_000 >= 0.1) {
             const wallet: string = result.message.accountKeys[0];
-            logger.info(`Token ${mintAddress} was bought for ${(result.preBalance - result.postBalance) / 1_000_000_000} SOL by ${wallet}`);
+            asyncLogger.info(`Token ${mintAddress} was bought for ${(result.preBalance - result.postBalance) / 1_000_000_000} SOL by ${wallet}`);
             if(!(await BlacklistHandler.isWalletOnBlacklist(wallet))){ // if account not in Blacklist
               accountsMonitor.addAccountMonitoringTask(wallet, mintAddress);
               blacklistHandler.addAccountToCache(mintAddress, wallet);
@@ -61,7 +61,7 @@ class TokenBuyMonitor {
           }
         }
       } catch (error) {
-        logger.error("Error occurred: " + error);
+        asyncLogger.error("Error occurred: " + error);
       }
     });
 
@@ -74,7 +74,7 @@ class TokenBuyMonitor {
         }
       });
     }).catch((reason) => {
-      logger.error("Subscription error: " + reason);
+      asyncLogger.error("Subscription error: " + reason);
       throw reason;
     });
 
@@ -92,7 +92,7 @@ class TokenBuyMonitor {
         await Promise.allSettled(this.tasks);
         await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (error) {
-        logger.error("Stream error, restarting in 1 second...", error);
+        asyncLogger.error("Stream error, restarting in 1 second...");
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }

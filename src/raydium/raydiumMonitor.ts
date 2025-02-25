@@ -8,7 +8,7 @@ import { DateTime } from 'luxon';
 
 import { tOutPut } from "./transactionOutput";
 import { searchForInitialize2 } from "./utils/logTXN";
-import { logger } from "../../config/appConfig";
+import { asyncLogger } from "../../config/appConfig";
 import { grpcUrl, backupGrpcUrl, raydiumCacheExpitationMin } from "../../config/config";
 
 export class RaydiumMigrationsMonitor {
@@ -51,7 +51,7 @@ export class RaydiumMigrationsMonitor {
         await this.checkConnection();
         await this.handleStream();
       } catch (error) {
-        logger.error("Stream error, restarting in 1 second...", error);
+        asyncLogger.error("Stream error, restarting in 1 second...");
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
@@ -61,7 +61,7 @@ export class RaydiumMigrationsMonitor {
     try {
       await this.client.ping(1);
     } catch (error) {
-      logger.error(`Ping failed for ${this.endpoint}, switching to backup...`);
+      asyncLogger.error(`Ping failed for ${this.endpoint}, switching to backup...`);
       this.endpoint = this.endpoint === grpcUrl ? backupGrpcUrl : grpcUrl;
       this.client = new Client(this.endpoint, undefined, undefined);
     }
@@ -87,7 +87,7 @@ export class RaydiumMigrationsMonitor {
 
       const expirationTime = new Date(Date.now() + raydiumCacheExpitationMin * 60000);
       this.tokens.set(mintAddress, expirationTime);
-      logger.info(`Tracking migrated Token: ${mintAddress}, going to be deleted at ${DateTime.fromMillis(Date.now() + raydiumCacheExpitationMin * 60000, { zone: 'Europe/Paris' })}`);
+      asyncLogger.info(`Tracking migrated Token: ${mintAddress}, going to be deleted at ${DateTime.fromMillis(Date.now() + raydiumCacheExpitationMin * 60000, { zone: 'Europe/Paris' })}`);
     } finally {
       release();
     }
@@ -100,9 +100,7 @@ export class RaydiumMigrationsMonitor {
     try {
       if (this.tokens.has(mintAddress)) {
         this.tokens.delete(mintAddress);
-        logger.info(`Manually removed token from Raydium Monitor: ${mintAddress}`);
-      } else {
-        logger.warn(`Tried to remove non-existing token from Raydium Monitor: ${mintAddress}`);
+        asyncLogger.info(`Manually removed token from Raydium Monitor: ${mintAddress}`);
       }
     } finally {
       release();
@@ -114,7 +112,7 @@ export class RaydiumMigrationsMonitor {
 
     const streamClosed = new Promise<void>((resolve, reject) => {
       stream.on("error", (error) => {
-        logger.error("Error occurred: ", error);
+        asyncLogger.error(`Error occurred: ${error}`);
         reject(error);
         stream.end();
       });
@@ -133,7 +131,7 @@ export class RaydiumMigrationsMonitor {
         }
         
       } catch (error) {
-        logger.error("Error occurred: ", error);
+        asyncLogger.error(`Error occurred: ${error}`);
       }
     });
 
@@ -146,7 +144,7 @@ export class RaydiumMigrationsMonitor {
         }
       });
     }).catch((reason) => {
-      logger.error("Subscription error:", reason);
+      asyncLogger.error(`Subscription error: ${reason}`);
       throw reason;
     });
 

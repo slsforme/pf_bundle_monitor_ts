@@ -21,6 +21,15 @@ export const logger = winston.createLogger({
   ],
 });
 
+export const asyncLogger = {
+  info: (message: string) => {
+    setImmediate(() => logger.info(message));
+  },
+  error: (message: string) => {
+    setImmediate(() => logger.error(message));
+  },
+};
+
 export const client: Client  = new Client(grpcUrl, undefined, undefined);
 export const backupClient: Client = new Client(backupGrpcUrl, undefined, undefined);
 

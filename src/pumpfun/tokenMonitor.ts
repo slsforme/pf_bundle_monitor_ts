@@ -3,7 +3,7 @@ import { Mutex } from "async-mutex";
 import Client from "@triton-one/yellowstone-grpc";
 import { DateTime } from 'luxon';
 
-import { backupClient, client, logger } from "../../config/appConfig";
+import { backupClient, client, asyncLogger, logger } from "../../config/appConfig";
 import { cacheExpirationMin, grpcUrl, backupGrpcUrl } from "../../config/config";
 import { raydiumMigrationMonitor, RaydiumMigrationsMonitor } from "../raydium/raydiumMonitor";
 import { tokenBuyMonitor } from "./tokenBuysMonitor";
@@ -27,7 +27,7 @@ export class TokenMonitor {
       const stream: any = await this.client.subscribe();
       this.streams.set(mintAddress, stream);
       tokenBuyMonitor.addTokenBuyTask(mintAddress, stream);
-      logger.info(`Started monitoring Token with CA: ${mintAddress}, going to be deleted at ${DateTime.fromMillis(Date.now() + cacheExpirationMin * 60000, { zone: 'Europe/Paris' })}`);
+      asyncLogger.info(`Started monitoring Token with CA: ${mintAddress}, going to be deleted at ${DateTime.fromMillis(Date.now() + cacheExpirationMin * 60000, { zone: 'Europe/Paris' })}`);
     } finally {
       release();
     }
@@ -41,7 +41,7 @@ export class TokenMonitor {
       if (this.tokens.has(mintAddress)) {
         this.tokens.delete(mintAddress);
         await this.deleteAndDestroyStream(mintAddress);
-        logger.info(`Manually removed token: ${mintAddress}`);
+        asyncLogger.info(`Manually removed token: ${mintAddress}`);
       }
     } finally {
       release();
@@ -61,7 +61,7 @@ export class TokenMonitor {
 
         for (const mintAddress of expiredTokens) {
           if (await this.raydiumMonitor.checkToken(mintAddress)){
-            logger.info(`Token ${mintAddress} migrated to Raydium, removing from monitoring.`);
+            asyncLogger.info(`Token ${mintAddress} migrated to Raydium, removing from monitoring.`);
             this.tokens.delete(mintAddress);
             await this.deleteAndDestroyStream(mintAddress);
             continue;
@@ -69,13 +69,13 @@ export class TokenMonitor {
 
           const expirationTime = this.tokens.get(mintAddress);
           if (expirationTime && expirationTime <= now) {
-            logger.info(`Token ${mintAddress} expired, removing from monitoring.`);
+            asyncLogger.info(`Token ${mintAddress} expired, removing from monitoring.`);
             this.tokens.delete(mintAddress);
             await this.deleteAndDestroyStream(mintAddress);
           } 
         }
       } catch(error){
-          logger.error(`Error occurred: ${error}`)
+          asyncLogger.error(`Error occurred: ${error}`)
       } finally {
         release();
       }
@@ -99,10 +99,8 @@ export class TokenMonitor {
         try {
             await stream.destroy();
         } catch (error) {
-            logger.error(`Failed to destroy stream for ${mintAddress}: ${error}`);
+            asyncLogger.error(`Failed to destroy stream for ${mintAddress}: ${error}`);
         }
-    } else {
-        logger.warn(`Stream for token ${mintAddress} was already removed or never existed.`);
     }
     this.streams.delete(mintAddress);
   }
