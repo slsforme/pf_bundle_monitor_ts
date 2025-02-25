@@ -1,7 +1,6 @@
 import Client, { CommitmentLevel, SubscribeRequest, SubscribeUpdate } from "@triton-one/yellowstone-grpc";
 
 import { tOutPut } from "./utils/transactionOutput";
-import { grpcUrl, backupGrpcUrl } from "../../config/config";
 import { backupClient, client, asyncLogger } from "../../config/appConfig";
 import { accountsMonitor, blacklistHandler, BlacklistHandler } from "../accounts/accountsMonitor";
 
@@ -9,8 +8,7 @@ class TokenBuyMonitor {
   private client: Client;
   private tasks: Promise<void>[] = [];
 
-  constructor(private endpoint: string = grpcUrl) {
-    this.endpoint = endpoint;
+  constructor() {
     this.client = client;
   }
 
@@ -54,7 +52,7 @@ class TokenBuyMonitor {
           if ((result.preBalance - result.postBalance) / 1_000_000_000 >= 0.1) {
             const wallet: string = result.message.accountKeys[0];
             asyncLogger.info(`Token ${mintAddress} was bought for ${(result.preBalance - result.postBalance) / 1_000_000_000} SOL by ${wallet}`);
-            if(!(await BlacklistHandler.isWalletOnBlacklist(wallet))){ // if account not in Blacklist
+            if(!(await BlacklistHandler.isWalletOnBlacklist(wallet))){ 
               accountsMonitor.addAccountMonitoringTask(wallet, mintAddress);
               blacklistHandler.addAccountToCache(mintAddress, wallet);
             }
