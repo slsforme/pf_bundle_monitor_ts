@@ -176,6 +176,7 @@ export class BlacklistHandler {
             
             if (accountData.count < 3) {
               accountData.count += 1;
+              asyncLogger.info("Found relation!");
               accountData.allRelations.push([keyAccounts[j], ...nextAccounts]);
               
               if (accountData.count === 3) { 
@@ -190,7 +191,7 @@ export class BlacklistHandler {
     }
   }
 
-  public async addAccountToCache(token: string, account: string): Promise<void> { 
+  public async addAccountToCache(token: string, account: string, keyAccount: string = null): Promise<void> { 
     // Initialize account in cache if not present
     if (!this.accsCache.has(account)) {
       this.accsCache.set(account, 0);
