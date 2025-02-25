@@ -58,15 +58,6 @@ function checkArray(arr: string[], first: string, second: string): number {
 }
 
 
-// Пример использования
-const matrix = [
-  ["a", "b", "c"],
-  ["d", "a", "e"],
-  ["f", "g", "b"]
-];
-console.log(findSequenceInMatrix(matrix, ["a", "b"])); // [[0, 0], [0, 1]]
-
-
 // Cache to prevent duplicate reads of blacklist/whitelist files
 let cachedBlacklist: Set<string> | null = null;
 let lastBlacklistUpdate = 0;
