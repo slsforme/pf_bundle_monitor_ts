@@ -10,6 +10,63 @@ import { tOutPut } from "./utils/transactionOutput";
 const blacklistFilePath = path.join(__dirname, '../data/blacklist-wallets.txt');
 const whitelistFilePath = path.join(__dirname, '../data/whitelist-wallets.txt');
 
+function findAllArraysContaining(matrix: string[][], target: string): string[][] {
+  return matrix.filter(row => row.includes(target));
+}
+
+function findSequenceInMatrix(matrix: string[][], target: [string, string]): number | null {
+  const rows = matrix.length;
+  const cols = matrix[0].length;
+  const [first, second] = target;
+  
+  // Проверяем строки
+  for (let i = 0; i < rows; i++) {
+      const index = checkArray(matrix[i], first, second);
+      if (index !== -1) return i;
+  }
+  
+  // Проверяем столбцы
+  for (let j = 0; j < cols; j++) {
+      const column = matrix.map(row => row[j]);
+      const index = checkArray(column, first, second);
+      if (index !== -1) return j;
+  }
+  
+  // Проверяем главные и побочные диагонали
+  for (let d = -rows + 1; d < cols; d++) {
+      const mainDiagonal = [], antiDiagonal = [];
+      for (let i = 0; i < rows; i++) {
+          if (matrix[i][i + d] !== undefined) {
+              mainDiagonal.push(matrix[i][i + d]);
+          }
+          if (matrix[i][cols - 1 - i - d] !== undefined) {
+              antiDiagonal.push(matrix[i][cols - 1 - i - d]);
+          }
+      }
+      if (checkArray(mainDiagonal, first, second) !== -1) return d;
+      if (checkArray(antiDiagonal, first, second) !== -1) return d;
+  }
+  
+  return null;
+}
+
+function checkArray(arr: string[], first: string, second: string): number {
+  for (let i = 0; i < arr.length - 1; i++) {
+      if (arr[i] === first && arr[i + 1] === second) return i;
+  }
+  return -1;
+}
+
+
+// Пример использования
+const matrix = [
+  ["a", "b", "c"],
+  ["d", "a", "e"],
+  ["f", "g", "b"]
+];
+console.log(findSequenceInMatrix(matrix, ["a", "b"])); // [[0, 0], [0, 1]]
+
+
 // Cache to prevent duplicate reads of blacklist/whitelist files
 let cachedBlacklist: Set<string> | null = null;
 let lastBlacklistUpdate = 0;
@@ -19,15 +76,7 @@ export class BlacklistHandler {
   private blacklist: Set<string> = new Set<string>();
   private accs: Record<string, Set<string>> = {};
   private accsCache = new Map<string, number>();
-  private blacklistTracker = new Map<string, Map<string, string[]>>();
-  private matchMap = new Map<string, { 
-    count: number; 
-    keyAccount: string; 
-    token: string; 
-    relationalAccounts: string[];
-    allRelations: string[][];
-  }>();
-  private printedWallets = new Set<string>();
+  private blacklistTracker = new Map<string, Array<Array<string>>>();
 
   // Load blacklist into memory efficiently
   public static async getBlacklist(): Promise<Set<string>> {
@@ -97,106 +146,32 @@ export class BlacklistHandler {
       return false;
     }
   }
-
-  public async trackMatchMapChanges(): Promise<void> {
-    while (true) {
-      for (const [key, value] of this.matchMap.entries()) {
-        if (value.count >= 3 && !this.printedWallets.has(key)) { 
-          asyncLogger.info(`Found new relations for blacklist.
-            Account: ${key}  
-            Совпадений: ${value.count}
-            KeyAccount: ${value.keyAccount}
-            Token Mint Address: ${value.token}
-            Relational Accounts: ${value.relationalAccounts.join(', ')}
-            All Relations:
-            ${value.allRelations.map((relation, index) => `[${index + 1}] ${relation.join(' -> ')}`).join('\n')}
-            --------------------------`);            
-          this.printedWallets.add(key);
-        }
-      }
-      await delay(1000);
-    }
-  }
   
-  public async addAccountToBlacklistTracker(token: string, keyAccount: string, account: string): Promise<void> {
-    // Get or create token map
-    if (!this.blacklistTracker.has(token)) {
-      this.blacklistTracker.set(token, new Map([[keyAccount, [account]]]));
-    } else {
-      const tokenMap = this.blacklistTracker.get(token)!;
-      
-      // Get or create account list for key account
-      if (!tokenMap.has(keyAccount)) {
-        tokenMap.set(keyAccount, [account]);
-      } else {
-        const accounts = tokenMap.get(keyAccount)!;
-        
-        // Add account if not already present
-        if (!accounts.includes(account)) {
-          accounts.push(account);
-        }
-      }
-    }
 
-    this.updateMatchMap(token);
-  }
-  
-  private updateMatchMap(token: string): void {
-    const tokenMap = this.blacklistTracker.get(token);
-    if (!tokenMap) return;
+  public async addAccountToCache(token: string, account: string, keyAccount: string = null): Promise<void> {
+    /**
+     * TODO:
+     * 
+     */
     
-    const keyAccounts = Array.from(tokenMap.keys());
-    
-    // For each key account in the token
-    for (let i = 0; i < keyAccounts.length; i++) {
-      const accounts = tokenMap.get(keyAccounts[i]);
-      if (!accounts) continue;
-
-      // Compare with all other key accounts
-      for (let j = 0; j < keyAccounts.length; j++) { 
-        if (i === j) continue;
-
-        const nextAccounts = tokenMap.get(keyAccounts[j]);
-        if (!nextAccounts) continue;
-        
-        // Check each account for matches
-        accounts.forEach(account => {
-          if (!this.matchMap.has(account)) {
-            this.matchMap.set(account, {
-              count: 0,
-              keyAccount: "",
-              token: "",
-              relationalAccounts: [],
-              allRelations: [],
-            });
-          }
-
-          if (nextAccounts.includes(account)) {
-            const accountData = this.matchMap.get(account)!;
-            
-            if (accountData.count < 3) {
-              accountData.count += 1;
-              asyncLogger.info("Found relation!");
-              accountData.allRelations.push([keyAccounts[j], ...nextAccounts]);
-              
-              if (accountData.count === 3) { 
-                accountData.keyAccount = keyAccounts[i];
-                accountData.relationalAccounts = [...nextAccounts];
-                accountData.token = token;
-              }
-            }
-          }
-        });
-      }
-    }
-  }
-
-  public async addAccountToCache(token: string, account: string, keyAccount: string = null): Promise<void> { 
     // Initialize account in cache if not present
     if (!this.accsCache.has(account)) {
       this.accsCache.set(account, 0);
     }
     
+    // Track relations
+    if (!this.blacklistTracker.get(token)){
+      this.blacklistTracker.set(token, []);
+    } else {
+      if (keyAccount !== null){
+        const arrayIndex: number | null = findSequenceInMatrix(this.blacklistTracker.get(token), [keyAccount, account]);
+        if(arrayIndex){
+          this.blacklistTracker.get(token)[arrayIndex].push(account);
+        } else {
+          this.blacklistTracker.get(token).push([keyAccount, account]);
+        }
+      }
+    }
     // Initialize token set if not present
     if (!(token in this.accs)) {
       this.accs[token] = new Set<string>();
@@ -221,6 +196,8 @@ export class BlacklistHandler {
           const added = await BlacklistHandler.addWalletToBlacklist(key);
           if (added) {
             asyncLogger.info(`Account ${key} got blacklisted.`);
+            // findAllArraysContaining();  
+            // Вывести все связи + токен
           }
         }
       } 
@@ -313,7 +290,6 @@ class AccountsMonitor {
               
               await this.addAccountMonitoringTask(wallet, token);
               await blacklistHandler.addAccountToCache(token, wallet);
-              await blacklistHandler.addAccountToBlacklistTracker(token, account, wallet);
             }
           } catch (error) {
             asyncLogger.error(`Error processing transaction: ${error}`);
