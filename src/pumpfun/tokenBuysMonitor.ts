@@ -6,13 +6,12 @@ import { accountsMonitor, blacklistHandler, BlacklistHandler } from "../accounts
 
 class TokenBuyMonitor {
   private client: Client;
-  private tasks: Promise<void>[] = [];
 
   constructor() {
     this.client = client;
   }
 
-  private async handleStream(mintAddress: string, stream: any): Promise<void> {
+  public async handleStream(mintAddress: string, stream: any): Promise<void> {
     const request: SubscribeRequest = {
       accounts: {},
       slots: {},
@@ -51,9 +50,9 @@ class TokenBuyMonitor {
         if (result.preBalance > result.postBalance) { // If it's a buy tx
           if ((result.preBalance - result.postBalance) / 1_000_000_000 >= 0.1) {
             const wallet: string = result.message.accountKeys[0];
-            asyncLogger.info(`Token ${mintAddress} was bought for ${(result.preBalance - result.postBalance) / 1_000_000_000} SOL by ${wallet}`);
+            asyncLogger.info(`Token ${mintAddress} was bought for ${(result.preBalance - result.postBalance) / 1_000_000_000} SOL by ${wallet}. Started tracking wallet.`);
             if(!(await BlacklistHandler.isWalletOnBlacklist(wallet))){ 
-              accountsMonitor.addAccountMonitoringTask(wallet, mintAddress);
+              accountsMonitor.handleStream(wallet, mintAddress);
               blacklistHandler.addAccountToCache(mintAddress, wallet);
             }
           }
@@ -79,15 +78,11 @@ class TokenBuyMonitor {
     await streamClosed;
   }
 
-  public async addTokenBuyTask(mintAddress: string, stream: any): Promise<void> {
-    this.tasks.push(this.handleStream(mintAddress, stream));
-  }
 
   public async monitorTasks(): Promise<void> {
     while (true) {
       try {
         await this.checkConnection();
-        await Promise.allSettled(this.tasks);
         await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (error) {
         asyncLogger.error("Stream error, restarting in 1 second...");

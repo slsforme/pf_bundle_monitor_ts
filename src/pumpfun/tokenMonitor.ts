@@ -1,17 +1,14 @@
-import { setTimeout as delay } from "node:timers/promises";
-import { Mutex } from "async-mutex"; 
 import Client from "@triton-one/yellowstone-grpc";
 import { DateTime } from 'luxon';
 
-import { backupClient, client, asyncLogger, logger } from "../../config/appConfig";
-import { cacheExpirationMin, grpcUrl, backupGrpcUrl } from "../../config/config";
+import { backupClient, client, asyncLogger } from "../../config/appConfig";
+import { cacheExpirationMin } from "../../config/config";
 import { raydiumMigrationMonitor, RaydiumMigrationsMonitor } from "../raydium/raydiumMonitor";
 import { tokenBuyMonitor } from "./tokenBuysMonitor";
 
 export class TokenMonitor {
   private tokens: Map<string, Date> = new Map();
   private streams: Map<string, any> = new Map();
-  private lock: Mutex = new Mutex();
   private client: Client;
   private raydiumMonitor: RaydiumMigrationsMonitor = raydiumMigrationMonitor;
 
@@ -20,67 +17,43 @@ export class TokenMonitor {
   }
 
   async addToken(mintAddress: string): Promise<void> {
-    const release = await this.lock.acquire();
-    try {
-      const expirationTime = new Date(Date.now() + cacheExpirationMin * 60 * 1000 );
-      this.tokens.set(mintAddress, expirationTime);
-      const stream: any = await this.client.subscribe();
-      this.streams.set(mintAddress, stream);
-      tokenBuyMonitor.addTokenBuyTask(mintAddress, stream);
-      asyncLogger.info(`Started monitoring Token with CA: ${mintAddress}, going to be deleted at ${DateTime.fromMillis(Date.now() + cacheExpirationMin * 60000, { zone: 'Europe/Paris' })}`);
-    } finally {
-      release();
-    }
-    await delay(cacheExpirationMin * 60 * 1000);
-    await this.removeToken(mintAddress);
+    await this.monitorTokens();
+    const expirationTime = new Date(Date.now() + cacheExpirationMin * 60 * 1000 );
+    this.tokens.set(mintAddress, expirationTime);
+    const stream: any = await this.client.subscribe();
+    this.streams.set(mintAddress, stream);
+    tokenBuyMonitor.handleStream(mintAddress, stream);
+    asyncLogger.info(`Started monitoring Token with CA: ${mintAddress}, going to be deleted at ${DateTime.fromMillis(Date.now() + cacheExpirationMin * 60000, { zone: 'Europe/Paris' })}`);
   }
 
   async removeToken(mintAddress: string): Promise<void> {
-    const release = await this.lock.acquire();
-    try {
-      if (this.tokens.has(mintAddress)) {
-        this.tokens.delete(mintAddress);
-        await this.deleteAndDestroyStream(mintAddress);
-        asyncLogger.info(`Manually removed token: ${mintAddress}`);
-      }
-    } finally {
-      release();
+    if (this.tokens.has(mintAddress)) {
+      this.tokens.delete(mintAddress);
+      await this.deleteAndDestroyStream(mintAddress);
+      asyncLogger.info(`Manually removed token: ${mintAddress}`);
     }
   }
 
-  public async monitorTokens(): Promise<void> {
-    logger.info("Monitoring just started.");
+  private async monitorTokens(): Promise<void> {
     this.raydiumMonitor.startMonitoring();
+    const now = new Date();
+    const expiredTokens = Array.from(this.tokens.keys());
 
-    while (true) {
-      const release = await this.lock.acquire();
-      try {
-        await this.checkConnection();
-        const now = new Date();
-        const expiredTokens = Array.from(this.tokens.keys());
+    console.log(expiredTokens.length)
+    for (const mintAddress of expiredTokens) {
+      const expirationTime = this.tokens.get(mintAddress);
+      if (expirationTime && expirationTime <= now) {
+        asyncLogger.info(`Token ${mintAddress} expired, removing from monitoring.`);
+        this.tokens.delete(mintAddress);
+        this.deleteAndDestroyStream(mintAddress);
+      } 
 
-        for (const mintAddress of expiredTokens) {
-          if (await this.raydiumMonitor.checkToken(mintAddress)){
-            asyncLogger.info(`Token ${mintAddress} migrated to Raydium, removing from monitoring.`);
-            this.tokens.delete(mintAddress);
-            await this.deleteAndDestroyStream(mintAddress);
-            continue;
-          }
-
-          const expirationTime = this.tokens.get(mintAddress);
-          if (expirationTime && expirationTime <= now) {
-            asyncLogger.info(`Token ${mintAddress} expired, removing from monitoring.`);
-            this.tokens.delete(mintAddress);
-            await this.deleteAndDestroyStream(mintAddress);
-          } 
-        }
-      } catch(error){
-          asyncLogger.error(`Error occurred: ${error}`)
-      } finally {
-        release();
+      if (await this.raydiumMonitor.checkToken(mintAddress)){
+        asyncLogger.info(`Token ${mintAddress} migrated to Raydium, removing from monitoring.`);
+        this.tokens.delete(mintAddress);
+        this.deleteAndDestroyStream(mintAddress);
+        continue;
       }
-
-      await delay(1000);
     }
   }
 

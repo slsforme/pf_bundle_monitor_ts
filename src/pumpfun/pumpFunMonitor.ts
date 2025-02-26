@@ -2,7 +2,7 @@ import Client, { CommitmentLevel, SubscribeRequest, SubscribeUpdate } from "@tri
 import { pumpFunTransactionOutput } from "./utils/pumpFunTransactionOutput";
 import { grpcUrl, backupGrpcUrl } from "../../config/config";
 import { asyncLogger, client, backupClient } from "../../config/appConfig";
-import { TokenMonitor } from "./tokenMonitor";
+import { tokenMonitor, TokenMonitor } from "./tokenMonitor";
 
 export class PumpFunMonitor {
   private readonly request: SubscribeRequest;
@@ -12,7 +12,7 @@ export class PumpFunMonitor {
   private isMonitoring = false;
   private readonly reconnectDelay = 1000; 
 
-  constructor(tokenMonitor: TokenMonitor) {
+  constructor() {
     this.tokenMonitor = tokenMonitor;  
     this.client = client;
     
@@ -38,10 +38,7 @@ export class PumpFunMonitor {
     };
   }
 
-  async startMonitoring() {
-    // Start token monitoring separately
-    this.tokenMonitor.monitorTokens();
-    
+  async startMonitoring() {    
     if (this.isMonitoring) {
       return;
     }
@@ -145,10 +142,11 @@ export class PumpFunMonitor {
         return;
       }
       
-      asyncLogger.info(`New pump.fun token detected: ${mintAddress}`);
       this.tokenMonitor.addToken(mintAddress);
     } catch (error) {
       asyncLogger.error(`Error processing stream data: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }
+
+export const pumpFunMonitor = new PumpFunMonitor();
