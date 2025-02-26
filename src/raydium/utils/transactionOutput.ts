@@ -1,4 +1,4 @@
-import { decodeTransact } from "./utils/decodeTransaction";
+import { decodeTransact } from "./decodeTransaction";
 
 export function tOutPut(data){
     const dataTx = data?data?.transaction?.transaction:null;

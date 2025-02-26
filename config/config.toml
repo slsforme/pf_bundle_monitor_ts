@@ -10,7 +10,7 @@ backup_grpc_url = "http://new-york.grpc.pinnaclenode.com/"
 
 
 [numbers]
-cache_expiration_min = 10  # Timeout for removing token from pump.fun monitor in minutes
+cache_expiration_min = 10 # Timeout for removing token from pump.fun monitor in minutes
 raydium_cache_expitation_min = 10   # Timeout for removing token from Raydium monitor in minutes
 
 

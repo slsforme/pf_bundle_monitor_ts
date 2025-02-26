@@ -35,11 +35,10 @@ export class TokenMonitor {
   }
 
   private async monitorTokens(): Promise<void> {
-    this.raydiumMonitor.startMonitoring();
+    await this.checkConnection();
     const now = new Date();
     const expiredTokens = Array.from(this.tokens.keys());
 
-    console.log(expiredTokens.length)
     for (const mintAddress of expiredTokens) {
       const expirationTime = this.tokens.get(mintAddress);
       if (expirationTime && expirationTime <= now) {

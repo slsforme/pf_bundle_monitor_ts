@@ -10,41 +10,23 @@ import { tOutPut } from "./utils/transactionOutput";
 const blacklistFilePath = path.join(__dirname, '../data/blacklist-wallets.txt');
 const whitelistFilePath = path.join(__dirname, '../data/whitelist-wallets.txt');
 
-function findAllArraysContaining(matrix: string[][], target: string): string[][] {
+function findAllArraysContaining(matrix: string[][] | undefined, target: string): string[][] {
+  if (!matrix) return [];
   return matrix.filter(row => row.includes(target));
 }
 
-function findSequenceInMatrix(matrix: string[][], target: [string, string]): number | null {
-  const rows = matrix.length;
-  const cols = matrix[0].length;
-  const [first, second] = target;
+function findSequenceInMatrix(matrix: string[][], target: string[]): number | null {
+  if (!matrix || matrix.length === 0) return null;
   
-  // Проверяем строки
-  for (let i = 0; i < rows; i++) {
-      const index = checkArray(matrix[i], first, second);
-      if (index !== -1) return i;
-  }
-  
-  // Проверяем столбцы
-  for (let j = 0; j < cols; j++) {
-      const column = matrix.map(row => row[j]);
-      const index = checkArray(column, first, second);
-      if (index !== -1) return j;
-  }
-  
-  // Проверяем главные и побочные диагонали
-  for (let d = -rows + 1; d < cols; d++) {
-      const mainDiagonal = [], antiDiagonal = [];
-      for (let i = 0; i < rows; i++) {
-          if (matrix[i][i + d] !== undefined) {
-              mainDiagonal.push(matrix[i][i + d]);
-          }
-          if (matrix[i][cols - 1 - i - d] !== undefined) {
-              antiDiagonal.push(matrix[i][cols - 1 - i - d]);
-          }
+  // Ищем подпоследовательность в массивах
+  for (let i = 0; i < matrix.length; i++) {
+    if (matrix[i].length >= 2) {  // Проверяем, что массив достаточной длины
+      for (let j = 0; j < matrix[i].length - 1; j++) {
+        if (matrix[i][j] === target[0] && matrix[i][j + 1] === target[1]) {
+          return i;  // Возвращаем индекс массива, в котором нашли последовательность
+        }
       }
-      if (checkArray(mainDiagonal, first, second) !== -1) return d;
-      if (checkArray(antiDiagonal, first, second) !== -1) return d;
+    }
   }
   
   return null;
@@ -61,28 +43,30 @@ function checkArray(arr: string[], first: string, second: string): number {
 // Cache to prevent duplicate reads of blacklist/whitelist files
 let cachedBlacklist: Set<string> | null = null;
 let lastBlacklistUpdate = 0;
-const CACHE_TTL = 60000; // 1 minute cache TTL
+const CACHE_TTL = 60000; 
 
 export class BlacklistHandler {
   private blacklist: Set<string> = new Set<string>();
   private accs: Record<string, Set<string>> = {};
   private accsCache = new Map<string, number>();
+  private static whiteList: Array<string>;
   private blacklistTracker = new Map<string, Array<Array<string>>>();
 
-  // Load blacklist into memory efficiently
+  constructor() {
+    BlacklistHandler.whiteList = fs.readFileSync(whitelistFilePath, 'utf8').split('\n');;
+  }
+
   public static async getBlacklist(): Promise<Set<string>> {
     const currentTime = Date.now();
     
-    // Return cached data if it's fresh
     if (cachedBlacklist && (currentTime - lastBlacklistUpdate < CACHE_TTL)) {
       return cachedBlacklist;
     }
     
     try {
       // Read both files concurrently
-      const [blacklistData, whitelistData] = await Promise.all([
+      const [blacklistData] = await Promise.all([
         fs.promises.readFile(blacklistFilePath, 'utf8').catch(() => ''),
-        fs.promises.readFile(whitelistFilePath, 'utf8').catch(() => '')
       ]);
       
       // Process wallets from both files
@@ -95,7 +79,6 @@ export class BlacklistHandler {
       };
       
       processFile(blacklistData);
-      processFile(whitelistData);
       
       cachedBlacklist = wallets;
       lastBlacklistUpdate = currentTime;
@@ -116,6 +99,11 @@ export class BlacklistHandler {
       return false;
     }
   }
+
+  public static async isWalletOnWhitelist(wallet: string): Promise<boolean> {
+    if (this.whiteList.includes(wallet)) { return true; }
+    else { return false; }
+  } 
 
   public static async addWalletToBlacklist(wallet: string): Promise<boolean> {
     try {
@@ -139,30 +127,33 @@ export class BlacklistHandler {
   }
   
 
-  public async addAccountToCache(token: string, account: string, keyAccount: string = null): Promise<void> {
-    /**
-     * TODO:
-     * 
-     */
-    
+  public async addAccountToCache(token: string, account: string, keyAccount?: string): Promise<void> {    
     // Initialize account in cache if not present
     if (!this.accsCache.has(account)) {
       this.accsCache.set(account, 0);
     }
     
-    // Track relations
-    if (!this.blacklistTracker.get(token)){
-      this.blacklistTracker.set(token, []);
-    } else {
-      if (keyAccount !== null){
-        const arrayIndex: number | null = findSequenceInMatrix(this.blacklistTracker.get(token), [keyAccount, account]);
-        if(arrayIndex){
-          this.blacklistTracker.get(token)[arrayIndex].push(account);
-        } else {
-          this.blacklistTracker.get(token).push([keyAccount, account]);
-        }
-      }
-    }
+    // // Track relations
+    // if (!this.blacklistTracker.has(token)) {
+    //   this.blacklistTracker.set(token, []);
+    // }
+    
+    // if (keyAccount !== undefined) {
+    //   const tokenArrays = this.blacklistTracker.get(token) || [];
+    //   const arrayIndex = findSequenceInMatrix(tokenArrays, [keyAccount, account]);
+      
+    //   if (arrayIndex !== null) {
+    //     // Если найдена последовательность, добавляем account к найденному массиву
+    //     this.blacklistTracker.get(token)[arrayIndex].push(account);
+    //   } else {
+    //     // Иначе создаем новую цепочку
+    //     this.blacklistTracker.get(token).push([keyAccount, account]);
+    //   }
+    // }
+    
+    // Для отладки
+    // console.log("Blacklist Tracker:", JSON.stringify(Array.from(this.blacklistTracker.entries()), null, 2));
+
     // Initialize token set if not present
     if (!(token in this.accs)) {
       this.accs[token] = new Set<string>();
@@ -187,8 +178,8 @@ export class BlacklistHandler {
           const added = await BlacklistHandler.addWalletToBlacklist(key);
           if (added) {
             asyncLogger.info(`Account ${key} got blacklisted.`);
-            // findAllArraysContaining();  
-            // Вывести все связи + токен
+            // const result = findAllArraysContaining(this.blacklistTracker.get(token), key);  
+            // asyncLogger.info(`Related accounts for ${key}: ${JSON.stringify(result)}`);
           }
         }
       } 
@@ -198,7 +189,6 @@ export class BlacklistHandler {
 
 class AccountsMonitor {
   private client: Client;
-  private tasks: Promise<void>[] = [];
   private reconnecting = false;
 
   constructor(private endpoint: string = grpcUrl) {
@@ -221,7 +211,7 @@ class AccountsMonitor {
     }
   }
 
-  private async handleStream(account: string, token: string): Promise<void> {
+  public async handleStream(account: string, token: string): Promise<void> {
     const request: SubscribeRequest = {
       accounts: {}, 
       slots: {},
@@ -239,6 +229,8 @@ class AccountsMonitor {
       ping: undefined,
       commitment: CommitmentLevel.FINALIZED,
     };
+
+    asyncLogger.info(`Tracking ${account} txs.`)
 
     while (true) {
       try {
@@ -277,10 +269,20 @@ class AccountsMonitor {
                 : result.message.accountKeys[0];
                 
               const flowType = isOutflow ? "outflow" : "inflow";
-              asyncLogger.info(`Found ${flowType} tx: ${result.signature} by ${account}\n Tracking ${isOutflow ? "receiver" : "sender"} wallet: ${wallet}`);
-              
-              await this.addAccountMonitoringTask(wallet, token);
-              await blacklistHandler.addAccountToCache(token, wallet);
+              if (!BlacklistHandler.isWalletOnWhitelist(wallet))
+              {
+                asyncLogger.info(`Found ${flowType} tx: ${result.signature} by ${account}\n Tracking ${isOutflow ? "receiver" : "sender"} wallet: ${wallet}`);
+                asyncLogger.info(`Key account is ${account}`)
+                this.handleStream(wallet, token);
+                blacklistHandler.addAccountToCache(token, wallet, account);
+              } else {
+                 if (isOutflow && result.postBalances[0] / 1_000_000_000 < 0.1)
+                 {
+                  // TODO: найти совпадение в вайтлисте и вывести сообщение об этом
+                  // протестировать функцию
+                  asyncLogger.info(`Found ${flowType} tx: ${result.signature} by ${account}\n Tracking ${isOutflow ? "receiver" : "sender"} wallet: ${wallet}`);
+                 }
+              }
             }
           } catch (error) {
             asyncLogger.error(`Error processing transaction: ${error}`);
@@ -306,21 +308,8 @@ class AccountsMonitor {
       }
     }
   }
-
-  public async addAccountMonitoringTask(account: string, token: string): Promise<void> {
-    this.tasks.push(this.handleStream(account, token));
-  }
-
-  public async monitorTasks(): Promise<void> {
-    try {
-      await Promise.all(this.tasks);
-    } catch (error) {
-      asyncLogger.error(`Monitor tasks error: ${error}`);
-      await delay(2000);
-      await this.monitorTasks(); // Restart monitoring
-    }
-  }
 }
 
 export const blacklistHandler = new BlacklistHandler();
 export const accountsMonitor = new AccountsMonitor();
+

@@ -1,15 +1,13 @@
+import { raydiumMigrationMonitor } from "./src/raydium/raydiumMonitor";
 import { asyncLogger } from "./config/appConfig";
-import { tokenMonitor } from "./src/pumpfun/tokenMonitor";
-import { PumpFunMonitor } from "./src/pumpfun/pumpFunMonitor";
-import { accountsMonitor } from "./src/accounts/accountsMonitor";
+import { pumpFunMonitor } from "./src/pumpfun/pumpFunMonitor";
 import { tokenBuyMonitor } from "./src/pumpfun/tokenBuysMonitor";
 
 async function main() {
-  tokenMonitor.monitorTokens();
-  accountsMonitor.monitorTasks();
   tokenBuyMonitor.monitorTasks();
-  const pumpFunMonitor = new PumpFunMonitor(tokenMonitor);
-  await pumpFunMonitor.startMonitoring();
+  pumpFunMonitor.startMonitoring();
+  raydiumMigrationMonitor.startMonitoring();
+
 }
 
 main().catch((error) => {
