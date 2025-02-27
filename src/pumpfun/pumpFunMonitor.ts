@@ -3,6 +3,14 @@ import { pumpFunTransactionOutput } from "./utils/pumpFunTransactionOutput";
 import { grpcUrl, backupGrpcUrl } from "../../config/config";
 import { asyncLogger, client, backupClient } from "../../config/appConfig";
 import { tokenMonitor, TokenMonitor } from "./tokenMonitor";
+import { Kafka } from "kafkajs";
+
+const kafka = new Kafka({
+  clientId: 'app',
+  brokers: ['localhost:9092'],
+});
+
+const producer = kafka.producer()
 
 export class PumpFunMonitor {
   private readonly request: SubscribeRequest;
@@ -36,6 +44,9 @@ export class PumpFunMonitor {
       ping: undefined,
       commitment: CommitmentLevel.PROCESSED,
     };
+
+    this.initKafkaProducer();
+    this.startMonitoring();
   }
 
   async startMonitoring() {    
@@ -83,6 +94,7 @@ export class PumpFunMonitor {
       return false;
     }
   }
+  
 
   private async handleStream() {
     let stream;
@@ -131,6 +143,11 @@ export class PumpFunMonitor {
       });
     });
   }
+
+  private async initKafkaProducer() {
+    await producer.connect();
+    asyncLogger.info('PumpfunMonitor Kafka producer connected.');
+  }
   
   private async handleStreamData(data: SubscribeUpdate) {
     try {
@@ -141,8 +158,19 @@ export class PumpFunMonitor {
       if (!mintAddress) {
         return;
       }
-      
-      this.tokenMonitor.addToken(mintAddress);
+
+      const message = {
+        mintAddress: mintAddress,
+        expirationTime: new Date().toISOString, 
+      };
+  
+      await producer.send({
+        topic: 'topic3', 
+        messages: [{ value: JSON.stringify(message) }]
+      });
+
+      asyncLogger.info(`Monitoring new pump.fun token: ${mintAddress}`);
+
     } catch (error) {
       asyncLogger.error(`Error processing stream data: ${error instanceof Error ? error.message : String(error)}`);
     }

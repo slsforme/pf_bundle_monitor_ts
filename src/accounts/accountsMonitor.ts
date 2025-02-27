@@ -1,43 +1,17 @@
 import Client, { CommitmentLevel, SubscribeRequest } from "@triton-one/yellowstone-grpc"
 import { setTimeout as delay } from "node:timers/promises";
+import { Kafka } from 'kafkajs';
 import * as fs from 'fs';
 import * as path from 'path';
+
 
 import { asyncLogger } from "../../config/appConfig";
 import { grpcUrl, backupGrpcUrl } from "../../config/config";
 import { tOutPut } from "./utils/transactionOutput";
+import { parseArgs } from "node:util";
 
 const blacklistFilePath = path.join(__dirname, '../data/blacklist-wallets.txt');
 const whitelistFilePath = path.join(__dirname, '../data/whitelist-wallets.txt');
-
-function findAllArraysContaining(matrix: string[][] | undefined, target: string): string[][] {
-  if (!matrix) return [];
-  return matrix.filter(row => row.includes(target));
-}
-
-function findSequenceInMatrix(matrix: string[][], target: string[]): number | null {
-  if (!matrix || matrix.length === 0) return null;
-  
-  // Ищем подпоследовательность в массивах
-  for (let i = 0; i < matrix.length; i++) {
-    if (matrix[i].length >= 2) {  // Проверяем, что массив достаточной длины
-      for (let j = 0; j < matrix[i].length - 1; j++) {
-        if (matrix[i][j] === target[0] && matrix[i][j + 1] === target[1]) {
-          return i;  // Возвращаем индекс массива, в котором нашли последовательность
-        }
-      }
-    }
-  }
-  
-  return null;
-}
-
-function checkArray(arr: string[], first: string, second: string): number {
-  for (let i = 0; i < arr.length - 1; i++) {
-      if (arr[i] === first && arr[i + 1] === second) return i;
-  }
-  return -1;
-}
 
 
 // Cache to prevent duplicate reads of blacklist/whitelist files
@@ -50,7 +24,7 @@ export class BlacklistHandler {
   private accs: Record<string, Set<string>> = {};
   private accsCache = new Map<string, number>();
   private static whiteList: Array<string>;
-  private blacklistTracker = new Map<string, Array<Array<string>>>();
+  private blacklistTracker = new Map<string, Map<string, Array<string>>>();;
 
   constructor() {
     BlacklistHandler.whiteList = fs.readFileSync(whitelistFilePath, 'utf8').split('\n');;
@@ -100,20 +74,22 @@ export class BlacklistHandler {
     }
   }
 
-  public static async isWalletOnWhitelist(wallet: string): Promise<boolean> {
-    if (this.whiteList.includes(wallet)) { return true; }
-    else { return false; }
-  } 
+  public static async isWalletOnWhitelist(wallet: string): Promise<string | undefined> {
+      if (this.whiteList.includes(wallet)) {
+          return wallet; 
+      } else {
+          return undefined; 
+      }
+  }
+
 
   public static async addWalletToBlacklist(wallet: string): Promise<boolean> {
     try {
-      // Check if wallet is already blacklisted to prevent duplicates
       const blacklist = await BlacklistHandler.getBlacklist();
       if (blacklist.has(wallet)) {
-        return false; // Already exists
+        return false; 
       }
       
-      // Add to file and update cache
       await fs.promises.appendFile(blacklistFilePath, `${wallet}\n`, "utf8");
       blacklist.add(wallet);
       cachedBlacklist = blacklist;
@@ -128,71 +104,86 @@ export class BlacklistHandler {
   
 
   public async addAccountToCache(token: string, account: string, keyAccount?: string): Promise<void> {    
-    // Initialize account in cache if not present
-    if (!this.accsCache.has(account)) {
-      this.accsCache.set(account, 0);
-    }
-    
-    // // Track relations
-    // if (!this.blacklistTracker.has(token)) {
-    //   this.blacklistTracker.set(token, []);
-    // }
-    
-    // if (keyAccount !== undefined) {
-    //   const tokenArrays = this.blacklistTracker.get(token) || [];
-    //   const arrayIndex = findSequenceInMatrix(tokenArrays, [keyAccount, account]);
-      
-    //   if (arrayIndex !== null) {
-    //     // Если найдена последовательность, добавляем account к найденному массиву
-    //     this.blacklistTracker.get(token)[arrayIndex].push(account);
-    //   } else {
-    //     // Иначе создаем новую цепочку
-    //     this.blacklistTracker.get(token).push([keyAccount, account]);
-    //   }
-    // }
-    
-    // Для отладки
-    // console.log("Blacklist Tracker:", JSON.stringify(Array.from(this.blacklistTracker.entries()), null, 2));
+    if (keyAccount) {
+      this.addAccountToBlacklistTracker(token, account, keyAccount);
 
-    // Initialize token set if not present
-    if (!(token in this.accs)) {
-      this.accs[token] = new Set<string>();
-    }
+      if (!this.accsCache.has(account)) {
+        this.accsCache.set(account, 0);
+      }
 
-    // Update account occurrence count
-    if (this.accs[token].has(account)) {
-      const currentCount = this.accsCache.get(account) ?? 0;
-      this.accsCache.set(account, currentCount + 1);
-      asyncLogger.info(`Already has this account in cache: ${account}`);
-    } else {
-      this.accs[token].add(account);
-    }
-  
-    // Check for accounts that need to be blacklisted
-    for (const [key, value] of this.accsCache.entries()) {
-      if (value >= 3 && !this.blacklist.has(key)) {
-        // Check if already blacklisted
-        const isBlacklisted = await BlacklistHandler.isWalletOnBlacklist(key);
-        if (!isBlacklisted) {
-          this.blacklist.add(key);
-          const added = await BlacklistHandler.addWalletToBlacklist(key);
-          if (added) {
-            asyncLogger.info(`Account ${key} got blacklisted.`);
-            // const result = findAllArraysContaining(this.blacklistTracker.get(token), key);  
-            // asyncLogger.info(`Related accounts for ${key}: ${JSON.stringify(result)}`);
+      if (!(token in this.accs)) {
+        this.accs[token] = new Set<string>();
+      }
+
+      asyncLogger.info(`${keyAccount} -> ${account}`);
+
+      if (this.accs[token].has(account)) {
+        const currentCount = this.accsCache.get(account) ?? 0;
+        this.accsCache.set(account, currentCount + 1);
+        asyncLogger.info(`Already has this account in cache: ${account}`);
+      } else {
+        this.accs[token].add(account);
+      }
+    
+      for (const [key, value] of this.accsCache.entries()) {
+        if (value >= 3 && !this.blacklist.has(key)) {
+          const isBlacklisted = await BlacklistHandler.isWalletOnBlacklist(key);
+          if (!isBlacklisted) {
+            this.blacklist.add(key);
+            const added = await BlacklistHandler.addWalletToBlacklist(key);
+            if (added) {
+              asyncLogger.info(`Account ${key} got blacklisted.`);
+              this.findAndLogRelations(token, account);
+            }
           }
-        }
-      } 
+        } 
+      }
     }
+
+  }
+
+  private addAccountToBlacklistTracker(token: string, account: string, keyAccount: string) {
+    const keyAccountsMap = this.blacklistTracker.get(token) || new Map<string, Array<string>>();
+
+    const accounts = keyAccountsMap.get(keyAccount) || [];
+
+    accounts.push(account);
+
+    keyAccountsMap.set(keyAccount, accounts);
+
+    this.blacklistTracker.set(token, keyAccountsMap);
+  }
+
+  private findAndLogRelations(token: string, account: string){
+    const keyAccountsMap = this.blacklistTracker.get(token);
+
+    const relatedAccounts = new Array<Array<string>>();
+
+    keyAccountsMap.forEach((accounts, keyAccount) => {
+      if (accounts.includes(account)) {
+          relatedAccounts.push([keyAccount, ...accounts]);
+      }
+    });
+
+    asyncLogger.info("Found relation:")
+    asyncLogger.info(`${relatedAccounts.length}`);
+    relatedAccounts.forEach((related) => {
+      asyncLogger.info(related.join(' -> ')); 
+    });
   }
 }
+
 
 class AccountsMonitor {
   private client: Client;
   private reconnecting = false;
+  private kafkaConsumer: any;
+  private wallets = new Set();
+
 
   constructor(private endpoint: string = grpcUrl) {
     this.client = new Client(this.endpoint, undefined, undefined);
+    this.initKafkaConsumer();
   }
 
   private async checkConnection(): Promise<boolean> {
@@ -211,7 +202,12 @@ class AccountsMonitor {
     }
   }
 
-  public async handleStream(account: string, token: string): Promise<void> {
+  public async handleStream(account: string, mintAddress: string, keyAccount?: string): Promise<void> {
+    if (this.wallets.has(account)){
+      return;
+    } else {
+      this.wallets.add(account);
+    }
     const request: SubscribeRequest = {
       accounts: {}, 
       slots: {},
@@ -269,18 +265,22 @@ class AccountsMonitor {
                 : result.message.accountKeys[0];
                 
               const flowType = isOutflow ? "outflow" : "inflow";
-              if (!BlacklistHandler.isWalletOnWhitelist(wallet))
+              const walletOnWhitelist: string | undefined = await BlacklistHandler.isWalletOnWhitelist(wallet);
+              if (!walletOnWhitelist)
               {
                 asyncLogger.info(`Found ${flowType} tx: ${result.signature} by ${account}\n Tracking ${isOutflow ? "receiver" : "sender"} wallet: ${wallet}`);
-                asyncLogger.info(`Key account is ${account}`)
-                this.handleStream(wallet, token);
-                blacklistHandler.addAccountToCache(token, wallet, account);
-              } else {
-                 if (isOutflow && result.postBalances[0] / 1_000_000_000 < 0.1)
+                if (keyAccount){
+                  blacklistHandler.addAccountToCache(mintAddress, wallet, keyAccount);
+                  this.handleStream(wallet, mintAddress, keyAccount);
+                } else {
+                    blacklistHandler.addAccountToCache(mintAddress, wallet, account);
+                    this.handleStream(wallet, mintAddress, account);
+                }
+              } 
+              else {
+                 if (isOutflow && (result.postBalances[0] / 1_000_000_000) < 0.1)
                  {
-                  // TODO: найти совпадение в вайтлисте и вывести сообщение об этом
-                  // протестировать функцию
-                  asyncLogger.info(`Found ${flowType} tx: ${result.signature} by ${account}\n Tracking ${isOutflow ? "receiver" : "sender"} wallet: ${wallet}`);
+                  asyncLogger.info(`Found outflow tx: ${result.signature} by ${account} to exchange - whitelist wallet: ${walletOnWhitelist} `);
                  }
               }
             }
@@ -308,7 +308,34 @@ class AccountsMonitor {
       }
     }
   }
+
+
+  private async initKafkaConsumer() {
+    const kafka = new Kafka({
+      clientId: 'app',
+      brokers: ['localhost:9092'],
+    });
+
+    this.kafkaConsumer = kafka.consumer({ groupId: 'accounts-monitor' });
+
+    await this.kafkaConsumer.connect();
+    await this.kafkaConsumer.subscribe({ topic: 'topic4', fromBeginning: true });
+
+    await this.kafkaConsumer.run({
+      eachMessage: async ({ topic, partition, message }) => {
+        const msg = JSON.parse(message.value?.toString());
+        
+        const mintAddress: string = msg.mintAddress;
+        const wallet: string = msg.wallet;
+
+        this.handleStream(wallet, mintAddress);
+      },
+    });
+
+    asyncLogger.info('accountsMonitor Kafka consumer connected and listening for messages on topic4.');
+  }
 }
+
 
 export const blacklistHandler = new BlacklistHandler();
 export const accountsMonitor = new AccountsMonitor();
