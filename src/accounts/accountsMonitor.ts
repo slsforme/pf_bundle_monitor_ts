@@ -166,11 +166,14 @@ export class BlacklistHandler {
     });
 
     asyncLogger.info("Found relation:")
-    asyncLogger.info(`${relatedAccounts.length}`);
     relatedAccounts.forEach((related) => {
       asyncLogger.info(related.join(' -> ')); 
+      related.forEach(wallet => {
+        BlacklistHandler.addWalletToBlacklist(wallet);
+      });
     });
   }
+
 }
 
 
