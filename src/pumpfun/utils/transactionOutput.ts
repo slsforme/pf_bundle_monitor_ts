@@ -7,12 +7,12 @@ export async function tOutPut(data){
 
     const dataTx = data.transaction.transaction;
     const message = dataTx.transaction?.message;
-    const accountKeys = message.accountKeys.map((t)=>{
-         return decodeTransact(t)
-    });
     const meta = dataTx?.meta
     const preBalance: number = parseInt(meta.preBalances[0]);
     const postBalance: number = parseInt(meta.postBalances[0]);
+    const accountKeys = message.accountKeys.map((t)=>{
+         return decodeTransact(t)
+    });
     return {
         dataTx,
         meta,

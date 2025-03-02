@@ -5,7 +5,8 @@
     "main": "index.ts",
     "scripts": {
         "start": "npx ts-node index.ts",
-        "build": "npx tsc"
+        "build": "npx tsc",
+        "lint": "eslint . --ext .ts"
     },
     "author": "",
     "license": "ISC",
@@ -17,10 +18,12 @@
         "@solana/buffer-layout-utils": "^0.2.0",
         "@solana/web3.js": "^1.90.0",
         "@triton-one/yellowstone-grpc": "^0.4.0",
+        "@types/ioredis": "^4.28.10",
         "async": "^3.2.6",
         "async-mutex": "^0.5.0",
         "bs58": "^5.0.0",
         "dotenv": "^16.4.5",
+        "ioredis": "^5.5.0",
         "kafkajs": "^2.2.4",
         "lodash": "^4.17.21",
         "luxon": "^3.5.0",
@@ -34,6 +37,10 @@
         "@swc/core": "^1.11.4",
         "@swc/register": "^0.1.10",
         "@types/async": "^3.2.24",
+        "@typescript-eslint/eslint-plugin": "^8.25.0",
+        "@typescript-eslint/parser": "^8.25.0",
+        "eslint": "^9.21.0",
+        "eslint-define-config": "^2.1.0",
         "ts-node": "^10.9.2",
         "typescript": "^4.9.3"
     }

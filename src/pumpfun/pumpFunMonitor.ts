@@ -1,9 +1,9 @@
 import Client, { CommitmentLevel, SubscribeRequest, SubscribeUpdate } from "@triton-one/yellowstone-grpc";
+import { Kafka } from "kafkajs";
+
 import { pumpFunTransactionOutput } from "./utils/pumpFunTransactionOutput";
 import { grpcUrl, backupGrpcUrl } from "../../config/config";
 import { asyncLogger, client, backupClient } from "../../config/appConfig";
-import { tokenMonitor, TokenMonitor } from "./tokenMonitor";
-import { Kafka } from "kafkajs";
 
 const kafka = new Kafka({
   clientId: 'app',
@@ -15,13 +15,11 @@ const producer = kafka.producer()
 export class PumpFunMonitor {
   private readonly request: SubscribeRequest;
   private client: Client;
-  private readonly tokenMonitor: TokenMonitor;
   private readonly pumpFunProgram = "TSLvdd1pWpHVjahSpsvCXUbgwsL3JAcvokwaKt1eokM";
   private isMonitoring = false;
   private readonly reconnectDelay = 1000; 
 
   constructor() {
-    this.tokenMonitor = tokenMonitor;  
     this.client = client;
     
     this.request = {

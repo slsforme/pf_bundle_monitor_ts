@@ -1,9 +1,10 @@
 import Client, { CommitmentLevel, SubscribeRequest, SubscribeUpdate } from "@triton-one/yellowstone-grpc";
 import { Kafka } from 'kafkajs';
+import { Redis } from "ioredis";
 
 import { tOutPut } from "./utils/transactionOutput";
-import { backupClient, client, asyncLogger } from "../../config/appConfig";
-import { accountsMonitor, blacklistHandler, BlacklistHandler } from "../accounts/accountsMonitor";
+import { backupClient, client, asyncLogger, redis } from "../../config/appConfig";
+import { BlacklistHandler } from "../accounts/accountsMonitor";
 
 class TokenBuyMonitor {
   private client: Client;
@@ -59,17 +60,8 @@ class TokenBuyMonitor {
           if ((result.preBalance - result.postBalance) / 1_000_000_000 >= 0.1) {
             const wallet: string = result.message.accountKeys[0];
             asyncLogger.info(`Token ${mintAddress} was bought for ${(result.preBalance - result.postBalance) / 1_000_000_000} SOL by ${wallet}. Started tracking wallet.`);
-            if(!(await BlacklistHandler.isWalletOnBlacklist(wallet))){ 
-              
-              const message = {
-                mintAddress: mintAddress,
-                wallet: wallet, 
-              };
-
-              await this.kafkaProducer.send({
-                topic: 'topic4', 
-                messages: [{ value: JSON.stringify(message)}]
-              });
+            if(!(await BlacklistHandler.isWalletOnBlacklist(wallet)) && !(await BlacklistHandler.isWalletOnWhitelist(wallet))){ 
+                await redis.sadd(mintAddress, wallet);
             } else {
               asyncLogger.info(`This wallet is already on blacklist: ${wallet} Stopped tracking wallet.`)
             }
@@ -165,8 +157,7 @@ class TokenBuyMonitor {
           }
        }); 
     }, 1000); 
-}
-
+  }
 }
 
 export const tokenBuyMonitor = new TokenBuyMonitor();

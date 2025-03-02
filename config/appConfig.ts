@@ -3,6 +3,7 @@ import winston from "winston";
 import fs from "fs";
 import path from "path";
 import { backupGrpcUrl, grpcUrl } from "./config";
+import Redis from "ioredis";
 
 function getDailyLogFolder(): string {
   const now = new Date();
@@ -89,9 +90,10 @@ export const asyncLogger = {
   },
   debug: (message: string) => {
     setImmediate(() => logger.debug(message));
-  }
+  }           
 };
 
 // Клиенты
-export const client: Client = new Client(grpcUrl, undefined, undefined);
-export const backupClient: Client = new Client(backupGrpcUrl, undefined, undefined);
+export const client: Client = new Client(grpcUrl, undefined, { "grpc.max_receive_message_length": 64 * 1024 * 1024 });
+export const backupClient: Client = new Client(backupGrpcUrl, undefined, { "grpc.max_receive_message_length": 64 * 1024 * 1024 });
+export const redis = new Redis();

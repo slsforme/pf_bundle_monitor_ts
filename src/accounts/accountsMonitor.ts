@@ -139,7 +139,6 @@ export class BlacklistHandler {
         } 
       }
     }
-
   }
 
   private addAccountToBlacklistTracker(token: string, account: string, keyAccount: string) {
@@ -229,7 +228,7 @@ class AccountsMonitor {
       commitment: CommitmentLevel.FINALIZED,
     };
 
-    asyncLogger.info(`Tracking ${account} txs.`)
+    asyncLogger.info(`Tracking ${account} txs.`);
 
     while (true) {
       try {
@@ -251,7 +250,6 @@ class AccountsMonitor {
           stream.on("close", resolve);
         });
 
-        // Set up data processing
         stream.on("data", async (data) => {
           try {
             const result = await tOutPut(data);
