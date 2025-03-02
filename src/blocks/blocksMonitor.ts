@@ -13,7 +13,7 @@ class BlocksMonitor {
 
   constructor() {
     this.client = client;
-    // this.initKafkaProducer();
+    this.initKafkaProducer();
     this.monitorTasks();
     this.handleStream();
   }
@@ -49,14 +49,12 @@ class BlocksMonitor {
 
     stream.on("data", async (data: SubscribeUpdate) => {
         try{
-          const currentTime = new Date(parseInt(data.block.blockTime.timestamp) * 1000);
-          console.log(data.block.blockHeight);
-          console.log(`${currentTime.toLocaleString()}`);
+          const block = await bOutput(data);
+          this.parseTransactions(block.txs);
 
         } catch(error){
-          console.log(error);
+          asyncLogger.error(error);
         }
-        // this.parseTransactions(block.txs);
 
     });
     ``
