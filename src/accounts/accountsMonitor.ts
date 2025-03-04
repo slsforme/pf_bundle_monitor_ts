@@ -8,13 +8,11 @@ import * as path from 'path';
 import { asyncLogger } from "../../config/appConfig";
 import { grpcUrl, backupGrpcUrl } from "../../config/config";
 import { tOutPut } from "./utils/transactionOutput";
-import { parseArgs } from "node:util";
 
 const blacklistFilePath = path.join(__dirname, '../data/blacklist-wallets.txt');
 const whitelistFilePath = path.join(__dirname, '../data/whitelist-wallets.txt');
 
 
-// Cache to prevent duplicate reads of blacklist/whitelist files
 let cachedBlacklist: Set<string> | null = null;
 let lastBlacklistUpdate = 0;
 const CACHE_TTL = 60000; 
@@ -25,9 +23,11 @@ export class BlacklistHandler {
   private accsCache = new Map<string, number>();
   private static whiteList: Array<string>;
   private blacklistTracker = new Map<string, Map<string, Array<string>>>();;
-
+  
   constructor() {
-    BlacklistHandler.whiteList = fs.readFileSync(whitelistFilePath, 'utf8').split('\n');;
+    BlacklistHandler.whiteList = fs.readFileSync(whitelistFilePath, 'utf8')
+    .split('\n')
+    .map(item => item.replace(/[\r\n\s]+/g, '')); 
   }
 
   public static async getBlacklist(): Promise<Set<string>> {
@@ -74,11 +74,11 @@ export class BlacklistHandler {
     }
   }
 
-  public static async isWalletOnWhitelist(wallet: string): Promise<string | undefined> {
+  public static async isWalletOnWhitelist(wallet: string): Promise<boolean> {
       if (this.whiteList.includes(wallet)) {
-          return wallet; 
+          return true; 
       } else {
-          return undefined; 
+          return false; 
       }
   }
 
@@ -177,139 +177,11 @@ export class BlacklistHandler {
 
 
 class AccountsMonitor {
-  private client: Client;
-  private reconnecting = false;
   private kafkaConsumer: any;
-  private wallets = new Set();
-
 
   constructor(private endpoint: string = grpcUrl) {
-    this.client = new Client(this.endpoint, undefined, undefined);
     this.initKafkaConsumer();
   }
-
-  private async checkConnection(): Promise<boolean> {
-    try {
-      await this.client.ping(1);
-      return true;
-    } catch (error) {
-      if (!this.reconnecting) {
-        this.reconnecting = true;
-        asyncLogger.error(`Ping failed for ${this.endpoint}, switching to backup...`);
-        this.endpoint = this.endpoint === grpcUrl ? backupGrpcUrl : grpcUrl;
-        this.client = new Client(this.endpoint, undefined, undefined);
-        this.reconnecting = false;
-      }
-      return false;
-    }
-  }
-
-  public async handleStream(account: string, mintAddress: string, keyAccount?: string): Promise<void> {
-    if (this.wallets.has(account)){
-      return;
-    } else {
-      this.wallets.add(account);
-    }
-    const request: SubscribeRequest = {
-      accounts: {}, 
-      slots: {},
-      transactions: {
-        "holders": {
-          accountInclude: [account],
-          accountExclude: [],
-          accountRequired: []
-        }
-      },
-      entry: {},
-      blocks: {},
-      blocksMeta: {},
-      accountsDataSlice: [],
-      ping: undefined,
-      commitment: CommitmentLevel.FINALIZED,
-    };
-
-    asyncLogger.info(`Tracking ${account} txs.`);
-
-    while (true) {
-      try {
-        if (!(await this.checkConnection())) {
-          await delay(1000);
-          continue;
-        }
-
-        const stream = await this.client.subscribe();
-        
-        // Set up error handling
-        const streamClosed = new Promise<void>((resolve, reject) => {
-          stream.on("error", (error) => {
-            asyncLogger.error(`Stream error for account ${account}: ${error}`);
-            reject(error);
-            stream.end();
-          });
-          stream.on("end", resolve);
-          stream.on("close", resolve);
-        });
-
-        stream.on("data", async (data) => {
-          try {
-            const result = await tOutPut(data);
-            if (!result) return;
-            
-            const isOutflow = (result.postBalances[0] - result.preBalances[0]) < 0;
-            const transferAmount = isOutflow 
-              ? (result.preBalances[0] - result.postBalances[0])
-              : (result.postBalances[0] - result.preBalances[0]);
-              
-            if (transferAmount / 1_000_000_000 >= 0.1 && result.message.accountKeys.length < 7) {
-              const wallet = result.message.accountKeys[0] === account
-                ? result.message.accountKeys[1]
-                : result.message.accountKeys[0];
-                
-              const flowType = isOutflow ? "outflow" : "inflow";
-              const walletOnWhitelist: string | undefined = await BlacklistHandler.isWalletOnWhitelist(wallet);
-              if (!walletOnWhitelist)
-              {
-                asyncLogger.info(`Found ${flowType} tx: ${result.signature} by ${account}\n Tracking ${isOutflow ? "receiver" : "sender"} wallet: ${wallet}`);
-                if (keyAccount){
-                  blacklistHandler.addAccountToCache(mintAddress, wallet, keyAccount);
-                  this.handleStream(wallet, mintAddress, keyAccount);
-                } else {
-                    blacklistHandler.addAccountToCache(mintAddress, wallet, account);
-                    this.handleStream(wallet, mintAddress, account);
-                }
-              } 
-              else {
-                 if (isOutflow && (result.postBalances[0] / 1_000_000_000) < 0.1)
-                 {
-                  asyncLogger.info(`Found outflow tx: ${result.signature} by ${account} to exchange - whitelist wallet: ${walletOnWhitelist} `);
-                 }
-              }
-            }
-          } catch (error) {
-            asyncLogger.error(`Error processing transaction: ${error}`);
-          }
-        });
-
-        // Start subscription
-        await new Promise<void>((resolve, reject) => {
-          stream.write(request, (err: any) => {
-            if (!err) {
-              resolve();
-            } else {
-              reject(err);
-            }
-          });
-        });
-
-        await streamClosed;
-        
-      } catch (error) {
-        asyncLogger.error(`Stream error for account ${account}, reconnecting in 2 seconds: ${error}`);
-        await delay(2000);
-      }
-    }
-  }
-
 
   private async initKafkaConsumer() {
     const kafka = new Kafka({
@@ -320,20 +192,24 @@ class AccountsMonitor {
     this.kafkaConsumer = kafka.consumer({ groupId: 'accounts-monitor' });
 
     await this.kafkaConsumer.connect();
-    await this.kafkaConsumer.subscribe({ topic: 'topic4', fromBeginning: true });
+    await this.kafkaConsumer.subscribe({ topic: 'topic6', fromBeginning: true });
 
     await this.kafkaConsumer.run({
       eachMessage: async ({ topic, partition, message }) => {
         const msg = JSON.parse(message.value?.toString());
         
         const mintAddress: string = msg.mintAddress;
-        const wallet: string = msg.wallet;
+        const account: string = msg.account;
+        const keyAccount: string = msg.keyAccount;
 
-        this.handleStream(wallet, mintAddress);
+        blacklistHandler.addAccountToCache(mintAddress, account, keyAccount);
+        asyncLogger.info("Received data");
+
+        // TOFIX: data receiving 
       },
     });
 
-    asyncLogger.info('accountsMonitor Kafka consumer connected and listening for messages on topic4.');
+    asyncLogger.info('accountsMonitor Kafka consumer connected and listening for messages on topic5.');
   }
 }
 

@@ -4,7 +4,7 @@ import { Kafka } from 'kafkajs';
 import { backupClient, client, asyncLogger } from "../../config/appConfig";
 import { bOutput } from "./utils/blockOutput";
 import { tOutPut } from "./utils/transactionOutput";
-import { addToWallets, findMatchInTransaction } from "../redis/transactionHandler";
+import { addToWallets, findMatchInTransaction, getKeyAccount } from "../redis/transactionHandler";
 import { BlacklistHandler } from "../accounts/accountsMonitor";
 
 class BlocksMonitor {
@@ -13,8 +13,8 @@ class BlocksMonitor {
 
   constructor() {
     this.client = client;
-    this.initKafkaProducer();
     this.monitorTasks();
+    this.initKafkaProducer();
     this.handleStream();
   }
 
@@ -50,6 +50,7 @@ class BlocksMonitor {
     stream.on("data", async (data: SubscribeUpdate) => {
         try{
           const block = await bOutput(data);
+          if (!block) return;
           this.parseTransactions(block.txs);
 
         } catch(error){
@@ -76,6 +77,7 @@ class BlocksMonitor {
 
   public async monitorTasks(): Promise<void> {
     while (true) {
+      // TOFIX
       try {
         await this.checkConnection();
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -118,33 +120,37 @@ class BlocksMonitor {
         
       if (transferAmount / 1_000_000_000 >= 0.1 && decodedTx.accountKeys.length < 7) {
 
-        const [matchedWallets, mintAddress] = await findMatchInTransaction(decodedTx.accountKeys);
+        const [matchedWallets, mintAddress, keyAccount] = await findMatchInTransaction(decodedTx.accountKeys);
         if (matchedWallets.length){
+          console.log(matchedWallets)
           const account: string = matchedWallets[0];
-          asyncLogger.info(account);
           const wallet = decodedTx.accountKeys[0] === account
           ? decodedTx.accountKeys[1]
           : decodedTx.accountKeys[0];
           
           const flowType = isOutflow ? "outflow" : "inflow";
-          const walletOnWhitelist: string | undefined = await BlacklistHandler.isWalletOnWhitelist(wallet);
+          const walletOnWhitelist: boolean = await BlacklistHandler.isWalletOnWhitelist(wallet);
           if (!walletOnWhitelist)
           {
             asyncLogger.info(`Found ${flowType} tx: ${decodedTx.signature} by ${account}\n Tracking ${isOutflow ? "receiver" : "sender"} wallet: ${wallet}`);
             await addToWallets(mintAddress[0], wallet);
-            // TODO: передавать в Kafka
-            // if (keyAccount){
-            //   blacklistHandler.addAccountToCache(mintAddress, wallet, keyAccount);
-            //   this.handleStream(wallet, mintAddress, keyAccount);
-            // } else {
-            //     blacklistHandler.addAccountToCache(mintAddress, wallet, account);
-            //     this.handleStream(wallet, mintAddress, account);
-            // }
+            const message = {
+              mintAddress: mintAddress,
+              account: wallet,
+              keyAccount: keyAccount
+            }
+
+            this.kafkaProducer.send({
+              topic: "topic6",
+              messages: [{ value: JSON.stringify(message) }]
+            })
+
+            asyncLogger.info(`Sent info to accountsMonitor: ${JSON.stringify(message)}`);
           } 
           else {
             if (isOutflow && (decodedTx.postBalance / 1_000_000_000) < 0.1)
             {
-              asyncLogger.info(`Found outflow tx: ${decodedTx.signature} by ${account} to exchange - whitelist wallet: ${walletOnWhitelist} `);
+              asyncLogger.info(`Found outflow tx: ${decodedTx.signature} by ${account} to exchange - whitelist wallet: ${wallet} `);
             }
           }
         }
