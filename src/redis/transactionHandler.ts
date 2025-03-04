@@ -2,7 +2,8 @@ import { redis } from "../../config/appConfig";
 
 const SYSTEM_PROGRAMS: Array<string> = [
     '11111111111111111111111111111111',
-    'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
+    'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+    'ComputeBudget111111111111111111111111111111'
 ];
 
 export async function getWallets(key: string) {
