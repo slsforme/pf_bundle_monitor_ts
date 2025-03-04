@@ -205,7 +205,6 @@ class AccountsMonitor {
         blacklistHandler.addAccountToCache(mintAddress, account, keyAccount);
         asyncLogger.info("Received data");
 
-        // TOFIX: data receiving 
       },
     });
 
