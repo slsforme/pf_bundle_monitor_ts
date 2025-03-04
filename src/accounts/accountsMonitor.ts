@@ -203,8 +203,7 @@ class AccountsMonitor {
         const keyAccount: string = msg.keyAccount;
 
         blacklistHandler.addAccountToCache(mintAddress, account, keyAccount);
-        asyncLogger.info("Received data");
-
+        asyncLogger.info(`Received information from blocksMonitor: ${msg}`)
       },
     });
 

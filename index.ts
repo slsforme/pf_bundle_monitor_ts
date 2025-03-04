@@ -40,5 +40,7 @@ main().catch((error) => {
 /**
  * TODO:
  * + Interfaces & typing
+ * + Kafka service 
+ * + setup shell script / add redis & kafka to Dockerfile 
  */
 

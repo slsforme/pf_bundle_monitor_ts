@@ -122,7 +122,6 @@ class BlocksMonitor {
 
         const [matchedWallets, mintAddress, keyAccount] = await findMatchInTransaction(decodedTx.accountKeys);
         if (matchedWallets.length){
-          console.log(matchedWallets)
           const account: string = matchedWallets[0];
           const wallet = decodedTx.accountKeys[0] === account
           ? decodedTx.accountKeys[1]
