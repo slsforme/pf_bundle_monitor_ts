@@ -3,7 +3,12 @@ import AuthTokenStorageManager, { AuthToken } from "./authTokenStorageManager";
 
 export const createAuthorizationMiddleware = () => {
     return async (req: Request, res: Response, next: NextFunction) => {
+        if (req.path.startsWith("/docs")){
+            next();
+        }
+
         const authHeader = req.get('Authorization');
+        
         if (!authHeader) {
             res.status(403).json({ message: "Access denied. No token provided." });
             return; 
