@@ -33,11 +33,13 @@ app.use(express.json());
 app.use(DEFAULT_API_PATH + 'docs', swaggerUi.serve);
 app.get(DEFAULT_API_PATH + 'docs', swaggerUi.setup(swaggerDocument));
 
-app.get(DEFAULT_API_PATH, createAuthorizationMiddleware(), (req: Request, res: Response) => {
+app.use(DEFAULT_API_PATH, createAuthorizationMiddleware());
+
+app.get(DEFAULT_API_PATH, (req: Request, res: Response) => {
     res.json({ message: "Welcome to the FILTRED API." });
 });
 
-app.post(DEFAULT_API_PATH + 'check/', createAuthorizationMiddleware(), async (req: Request<{}, {}, CheckerRequestBody>, res: Response<CheckerResponse>) => {
+app.post(DEFAULT_API_PATH + 'check/', async (req: Request<{}, {}, CheckerRequestBody>, res: Response<CheckerResponse>) => {
     try { 
         const body: CheckerRequestBody = req.body;
         const mintAddress: string = body.mintAddress;
