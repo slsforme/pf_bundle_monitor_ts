@@ -5,6 +5,7 @@ import path from 'path';
 import swaggerUi from 'swagger-ui-express';
 import fs from 'fs';
 import YAML from 'yaml';
+import * as http from 'http';
 
 import { CheckerRequestBody, CheckerResponse } from "./types";
 import { BlacklistHandler } from "../src/accounts/accountsMonitor";
@@ -56,4 +57,8 @@ app.post(DEFAULT_API_PATH + 'check/', async (req: Request<{}, {}, CheckerRequest
     }
 });
 
-app.listen(PORT, '0.0.0.0' , () => console.log(`Server currently running on port ${PORT}. OpenAPI docs available at http://localhost:${PORT}/docs`));
+const server = http.createServer(app);
+
+server.listen(PORT, () => {
+  console.log('Server running on http://localhost:3000');
+});
