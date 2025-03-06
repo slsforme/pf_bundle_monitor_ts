@@ -4,7 +4,7 @@ info:
   description: API for checking blacklisted holders for given mint addresses
   version: 1.0.0
 servers:
-  - url: http://localhost:3000/api/v1
+  - url: http://148.113.161.186:3000/api/v1
     description: Local development server
 paths:
   /:

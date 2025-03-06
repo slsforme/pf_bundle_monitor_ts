@@ -30,8 +30,8 @@ app.use(cors({
 app.use(helmet());
 app.use(express.json());
 
-app.use('/docs', swaggerUi.serve);
-app.get('/docs', swaggerUi.setup(swaggerDocument));
+app.use(DEFAULT_API_PATH + '/docs', swaggerUi.serve);
+app.get(DEFAULT_API_PATH + '/docs', swaggerUi.setup(swaggerDocument));
 
 app.get(DEFAULT_API_PATH, createAuthorizationMiddleware(), (req: Request, res: Response) => {
     res.json({ message: "Welcome to the FILTRED API." });
