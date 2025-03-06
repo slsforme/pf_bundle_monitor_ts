@@ -15,6 +15,10 @@ export async function addToWallets(key: string, value: string) {
     await redis.sadd(key, value); 
 }
 
+export async function removeFromWallets(key: string) {
+    await redis.del(key);
+}
+
 export async function findMatchInTransaction(accountKeys: Array<string>): Promise<[string[], string, string | null]> {
     let cursor = '0'; 
     let matchedWallets: string[] = [];

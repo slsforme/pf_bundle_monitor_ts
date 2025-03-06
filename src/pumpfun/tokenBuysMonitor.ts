@@ -1,16 +1,18 @@
 import Client, { CommitmentLevel, SubscribeRequest, SubscribeUpdate } from "@triton-one/yellowstone-grpc";
 import { Kafka } from 'kafkajs';
-import { Redis } from "ioredis";
 
 import { tOutPut } from "./utils/transactionOutput";
 import { backupClient, client, asyncLogger, redis } from "../../config/appConfig";
 import { BlacklistHandler } from "../accounts/accountsMonitor";
+import { addToWallets, removeFromWallets } from "src/redis/transactionHandler";
+
+type StreamsPair = [Date, string];
 
 class TokenBuyMonitor {
   private client: Client;
   private kafkaConsumer: any;
   private kafkaProducer: any;
-  private streams = new Map<any, Date>();
+  private streams = new Map<any, StreamsPair>();
 
   constructor() {
     this.client = client;
@@ -61,7 +63,7 @@ class TokenBuyMonitor {
             const wallet: string = result.message.accountKeys[0];
             asyncLogger.info(`Token ${mintAddress} was bought for ${(result.preBalance - result.postBalance) / 1_000_000_000} SOL by ${wallet}. Started tracking wallet.`);
             if(!(await BlacklistHandler.isWalletOnBlacklist(wallet)) && !(await BlacklistHandler.isWalletOnWhitelist(wallet))){ 
-                await redis.sadd(mintAddress, wallet);
+                await addToWallets(mintAddress, wallet);
             } else {
               asyncLogger.info(`This wallet is already on blacklist: ${wallet} Stopped tracking wallet.`)
             }
@@ -123,12 +125,14 @@ class TokenBuyMonitor {
     await this.kafkaConsumer.run({
       eachMessage: async ({ topic, partition, message }) => {
         const msg = JSON.parse(message.value?.toString());
+        asyncLogger.info(`Got info from pumpFunMonitor: ${JSON.stringify(msg)}`);
         
         const mintAddress: string = msg.mintAddress;
         const expirationTime = new Date(msg.expirationTime);
 
         const stream: any = await this.client.subscribe();
-        this.streams.set(stream, expirationTime);
+        const pair: StreamsPair = [expirationTime, mintAddress];
+        this.streams.set(stream, pair);
         this.handleStream(mintAddress, stream);
       },
     });
@@ -151,9 +155,10 @@ class TokenBuyMonitor {
     setInterval(() => {
        const dates = Array.from(this.streams.entries());
        const now = new Date();
-       dates.forEach(([stream, date]) => {
-          if (date && date <= now){
-            stream.destroy();
+       dates.forEach(([stream, pair]) => {
+          if (pair[0] && pair[0] <= now){
+            stream.destroy();  
+            removeFromWallets(pair[1]);
           }
        }); 
     }, 1000); 

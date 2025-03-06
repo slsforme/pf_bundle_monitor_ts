@@ -37,3 +37,10 @@ temp/
 
 # JetBrains files
 .idea/
+
+# Test Files 
+test.*
+
+# Authentication Files
+auth-tokens.json
+    

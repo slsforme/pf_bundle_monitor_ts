@@ -93,7 +93,7 @@ export const asyncLogger = {
   }           
 };
 
-// Клиенты
+// Clients & Redis Component
 export const client: Client = new Client(grpcUrl, undefined, { "grpc.max_receive_message_length": 64 * 1024 * 1024 });
 export const backupClient: Client = new Client(backupGrpcUrl, undefined, { "grpc.max_receive_message_length": 64 * 1024 * 1024 });
 export const redis = new Redis();

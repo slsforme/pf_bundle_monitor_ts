@@ -1,21 +1,20 @@
-import Client, { CommitmentLevel, SubscribeRequest } from "@triton-one/yellowstone-grpc"
-import { setTimeout as delay } from "node:timers/promises";
 import { Kafka } from 'kafkajs';
 import * as fs from 'fs';
 import * as path from 'path';
 
-
 import { asyncLogger } from "../../config/appConfig";
-import { grpcUrl, backupGrpcUrl } from "../../config/config";
-import { tOutPut } from "./utils/transactionOutput";
 
-const blacklistFilePath = path.join(__dirname, '../data/blacklist-wallets.txt');
+const blacklistFilePath = path.join(__dirname, '../data/blacklist-wallets.json');
 const whitelistFilePath = path.join(__dirname, '../data/whitelist-wallets.txt');
 
 
 let cachedBlacklist: Set<string> | null = null;
 let lastBlacklistUpdate = 0;
 const CACHE_TTL = 60000; 
+interface BlacklistedAddress {
+  mintAddress: string,
+  accountAddress: string
+};
 
 export class BlacklistHandler {
   private blacklist: Set<string> = new Set<string>();
@@ -30,6 +29,8 @@ export class BlacklistHandler {
     .map(item => item.replace(/[\r\n\s]+/g, '')); 
   }
 
+
+
   public static async getBlacklist(): Promise<Set<string>> {
     const currentTime = Date.now();
     
@@ -38,26 +39,27 @@ export class BlacklistHandler {
     }
     
     try {
-      // Read both files concurrently
-      const [blacklistData] = await Promise.all([
-        fs.promises.readFile(blacklistFilePath, 'utf8').catch(() => ''),
-      ]);
+      if (!fs.existsSync(blacklistFilePath)) {
+        await fs.promises.writeFile(blacklistFilePath, '[]', 'utf8');
+        asyncLogger.info(`Created new blacklist file at ${blacklistFilePath}`);
+      }
+
+      const fileContent = await fs.promises.readFile(blacklistFilePath, 'utf8')
+      .catch((err) => {
+        asyncLogger.error(`Error reading blacklist file: ${err}`);
+        return '[]';
+      });
+    
+      const blacklistData: BlacklistedAddress[] = fileContent.trim() ? 
+        JSON.parse(fileContent) : [];
       
-      // Process wallets from both files
-      const wallets = new Set<string>();
-      const processFile = (data: string) => {
-        data.split('\n').forEach(line => {
-          const wallet = line.trim();
-          if (wallet) wallets.add(wallet);
-        });
-      };
+      const allAccountAddresses = blacklistData.map(item => item.accountAddress);
+      const setAccountAddresses = new Set<string>(allAccountAddresses);
       
-      processFile(blacklistData);
-      
-      cachedBlacklist = wallets;
+      cachedBlacklist = setAccountAddresses;
       lastBlacklistUpdate = currentTime;
       
-      return wallets;
+      return setAccountAddresses;
     } catch (error) {
       asyncLogger.error(`Error loading blacklist: ${error}`);
       return new Set<string>();
@@ -66,8 +68,19 @@ export class BlacklistHandler {
 
   public static async isWalletOnBlacklist(wallet: string): Promise<boolean> {
     try {
-      const blacklist = await BlacklistHandler.getBlacklist();
+      const blacklist: Set<string> = await BlacklistHandler.getBlacklist();
       return blacklist.has(wallet);
+    } catch (error) {
+      asyncLogger.error(`Error checking blacklist: ${error}`);
+      return false;
+    }
+  }
+
+  public static async doesTokenHasRuggers(mintAddress: string){
+    try {
+      const blacklistData: BlacklistedAddress[] = JSON.parse(await fs.promises.readFile(blacklistFilePath, 'utf8').catch(() => ''));
+      const isBlacklisted = blacklistData.some(item => item.mintAddress === mintAddress);
+      return isBlacklisted;
     } catch (error) {
       asyncLogger.error(`Error checking blacklist: ${error}`);
       return false;
@@ -83,18 +96,20 @@ export class BlacklistHandler {
   }
 
 
-  public static async addWalletToBlacklist(wallet: string): Promise<boolean> {
+  public static async addWalletToBlacklist(wallet: string, token: string): Promise<boolean> {
     try {
       const blacklist = await BlacklistHandler.getBlacklist();
       if (blacklist.has(wallet)) {
         return false; 
       }
-      
-      await fs.promises.appendFile(blacklistFilePath, `${wallet}\n`, "utf8");
+
+      const blacklistedAddress: BlacklistedAddress = { mintAddress: token, accountAddress: wallet };
+      const blacklistData: BlacklistedAddress[] = JSON.parse(await fs.promises.readFile(blacklistFilePath, 'utf8').catch(() => ''));
+      blacklistData.push(blacklistedAddress);
+      await fs.promises.writeFile(blacklistFilePath, JSON.stringify(blacklistData, null, 2));
       blacklist.add(wallet);
       cachedBlacklist = blacklist;
       lastBlacklistUpdate = Date.now();
-      
       return true;
     } catch (error) {
       asyncLogger.error(`Error adding wallet to blacklist: ${error}`);
@@ -130,10 +145,10 @@ export class BlacklistHandler {
           const isBlacklisted = await BlacklistHandler.isWalletOnBlacklist(key);
           if (!isBlacklisted) {
             this.blacklist.add(key);
-            const added = await BlacklistHandler.addWalletToBlacklist(key);
+            const added = await BlacklistHandler.addWalletToBlacklist(key, token);
             if (added) {
               asyncLogger.info(`Account ${key} got blacklisted.`);
-              this.findAndLogRelations(token, account);
+              await this.findAndLogRelations(token, account);
             }
           }
         } 
@@ -153,7 +168,7 @@ export class BlacklistHandler {
     this.blacklistTracker.set(token, keyAccountsMap);
   }
 
-  private findAndLogRelations(token: string, account: string){
+  private async findAndLogRelations(token: string, account: string){
     const keyAccountsMap = this.blacklistTracker.get(token);
 
     const relatedAccounts = new Array<Array<string>>();
@@ -165,21 +180,20 @@ export class BlacklistHandler {
     });
 
     asyncLogger.info("Found relation:")
-    relatedAccounts.forEach((related) => {
+    for (const related of relatedAccounts){
       asyncLogger.info(related.join(' -> ')); 
-      related.forEach(wallet => {
-        BlacklistHandler.addWalletToBlacklist(wallet);
-      });
-    });
+      for (const wallet of related){
+        BlacklistHandler.addWalletToBlacklist(wallet, token);
+      }
+    }
   }
-
 }
 
 
 class AccountsMonitor {
   private kafkaConsumer: any;
 
-  constructor(private endpoint: string = grpcUrl) {
+  constructor() {
     this.initKafkaConsumer();
   }
 
@@ -203,7 +217,7 @@ class AccountsMonitor {
         const keyAccount: string = msg.keyAccount;
 
         blacklistHandler.addAccountToCache(mintAddress, account, keyAccount);
-        asyncLogger.info(`Received information from blocksMonitor: ${msg}`)
+        asyncLogger.info(`Received information from blocksMonitor: ${JSON.stringify(msg)}`)
       },
     });
 

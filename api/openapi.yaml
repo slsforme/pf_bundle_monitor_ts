@@ -1,0 +1,97 @@
+openapi: 3.0.0
+info:
+  title: FILTRED API
+  description: API for checking blacklisted holders for given mint addresses
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development server
+paths:
+  /:
+    get:
+      summary: Get welcome message
+      description: Returns a welcome message to confirm the API is working
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Welcome to the FILTRED API."
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /check/:
+    post:
+      summary: Check blacklisted holders
+      description: Checks if a token has blacklisted holders (ruggers)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckerRequestBody'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckerResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+components:
+  schemas:
+    CheckerRequestBody:
+      type: object
+      required:
+        - mintAddress
+      properties:
+        mintAddress:
+          type: string
+          description: The mint address to check for blacklisted holders
+          example: "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+    CheckerResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Message indicating whether blacklisted holders were found
+          example: "Blacklisted wallets not found."
+  responses:
+    Forbidden:
+      description: Access denied due to invalid or missing authentication token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Access denied. No token provided."
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Internal server error."
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Authentication token must be provided in the Authorization header
