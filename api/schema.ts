@@ -30,8 +30,8 @@ app.use(cors({
 app.use(helmet());
 app.use(express.json());
 
-app.use(DEFAULT_API_PATH + 'docs', swaggerUi.serve);
-app.get(DEFAULT_API_PATH + 'docs', swaggerUi.setup(swaggerDocument));
+app.use('/docs', swaggerUi.serve);
+app.get('/docs', swaggerUi.setup(swaggerDocument));
 
 app.use(DEFAULT_API_PATH, createAuthorizationMiddleware());
 
