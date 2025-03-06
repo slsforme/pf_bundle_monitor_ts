@@ -15,7 +15,7 @@ import { asyncLogger } from "../config/appConfig";
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT) || 3000;
 const DEFAULT_API_PATH: string = "/api/v1/";
 
 const file = fs.readFileSync(path.resolve(__dirname, './openapi.yaml'), 'utf8');
@@ -54,4 +54,4 @@ app.post(DEFAULT_API_PATH + 'check/', createAuthorizationMiddleware(), async (re
     }
 });
 
-app.listen(PORT, () => console.log(`Server currently running on port ${PORT}. OpenAPI docs available at http://localhost:${PORT}/docs`));
+app.listen(PORT, '0.0.0.0' , () => console.log(`Server currently running on port ${PORT}. OpenAPI docs available at http://localhost:${PORT}/docs`));
