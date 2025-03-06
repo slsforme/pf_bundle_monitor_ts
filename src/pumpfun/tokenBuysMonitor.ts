@@ -158,7 +158,6 @@ class TokenBuyMonitor {
        dates.forEach(([stream, pair]) => {
           if (pair[0] && pair[0] <= now){
             stream.destroy();  
-            removeFromWallets(pair[1]);
           }
        }); 
     }, 1000); 
