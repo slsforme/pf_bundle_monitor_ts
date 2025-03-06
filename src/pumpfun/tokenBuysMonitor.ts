@@ -4,7 +4,7 @@ import { Kafka } from 'kafkajs';
 import { tOutPut } from "./utils/transactionOutput";
 import { backupClient, client, asyncLogger, redis } from "../../config/appConfig";
 import { BlacklistHandler } from "../accounts/accountsMonitor";
-import { addToWallets, removeFromWallets } from "src/redis/transactionHandler";
+import { addToWallets } from "../../src/redis/transactionHandler";
 
 type StreamsPair = [Date, string];
 
