@@ -164,7 +164,7 @@ async function cliAdminPanel(discordId: string){
 }
 
 async function cli(){
-  await figlet('CLI   V1', {
+  await figlet('FILTRED AUTH', {
         font: 'Graffiti',
         horizontalLayout: 'default',
         verticalLayout: 'default',

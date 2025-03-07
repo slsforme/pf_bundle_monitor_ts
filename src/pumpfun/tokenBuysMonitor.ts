@@ -125,13 +125,13 @@ class TokenBuyMonitor {
     await this.kafkaConsumer.run({
       eachMessage: async ({ topic, partition, message }) => {
         const msg = JSON.parse(message.value?.toString());
-        asyncLogger.info(`Got info from pumpFunMonitor: ${JSON.stringify(msg)}`);
         
         const mintAddress: string = msg.mintAddress;
         const expirationTime = new Date(msg.expirationTime);
-
+        
         const stream: any = await this.client.subscribe();
         const pair: StreamsPair = [expirationTime, mintAddress];
+        asyncLogger.info(`Got info from pumpFunMonitor: ${JSON.stringify(msg)}`);
         this.streams.set(stream, pair);
         this.handleStream(mintAddress, stream);
       },
