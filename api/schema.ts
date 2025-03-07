@@ -37,7 +37,12 @@ app.get('/docs', swaggerUi.setup(swaggerDocument));
 app.use(DEFAULT_API_PATH, createAuthorizationMiddleware());
 
 app.get(DEFAULT_API_PATH, (req: Request, res: Response) => {
-    res.json({ message: "Welcome to the FILTRED API." });
+    try{
+        res.json({ message: "Welcome to the FILTRED API." });
+    } catch (error){
+        res.status(500).json({ message: "An error occurred." });
+        asyncLogger.error(error);
+    }
 });
 
 app.post(DEFAULT_API_PATH + 'check/', async (req: Request<{}, {}, CheckerRequestBody>, res: Response<CheckerResponse>) => {

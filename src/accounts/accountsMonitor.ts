@@ -3,8 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { asyncLogger } from "../../config/appConfig";
-import { isExchangeWallet } from 'src/whitelist/exchangeChecker';
-import { isWhitelistedProgram } from 'src/whitelist/programChecker';
+import { isExchangeWallet } from '../whitelist/exchangeChecker';
+import { isWhitelistedProgram } from '../whitelist/programChecker';
 
 const blacklistFilePath = path.join(__dirname, '../data/blacklist-wallets.json');
 const whitelistFilePath = path.join(__dirname, '../data/whitelist-wallets.txt');
