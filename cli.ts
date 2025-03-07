@@ -1,9 +1,9 @@
 import { select, input, confirm } from '@inquirer/prompts';
-import chalk from 'chalk';
 import figlet from 'figlet';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import { join } from 'path';
+import { bold, underline } from "colorette";
 
 import AuthTokenManager from './api/authTokenManager';
 import AuthTokenStorageManager, { AuthToken } from './api/authTokenStorageManager';
@@ -16,7 +16,7 @@ function sleep(ms: number): Promise<void> {
 
 
 function exit(){
-  console.log(chalk.bold('- Bye!'));
+  console.log(bold('- Bye!'));
   process.exit(0);
 }
 
@@ -45,7 +45,7 @@ async function cliAdminPanel(discordId: string){
   const doesTokenExists: boolean = await AuthTokenStorageManager.doesTokenExists(discordId);
   if (doesTokenExists){
     const answer = await select({
-      message: `Select an option. Currently you working with User: ${chalk.underline.bold(discordId)}`,
+      message: `Select an option. Currently you working with User: ${bold(underline(discordId))}`,
       choices: [
         {
           name: 'Switch user',
@@ -90,10 +90,10 @@ async function cliAdminPanel(discordId: string){
         const toDelete = await confirm({ message: 'You sure you want to delete this token?' });
         if (toDelete){
             AuthTokenStorageManager.removeToken(discordId);
-            console.log(chalk.bold("Token was deleted successfully!"));
+            console.log(bold("Token was deleted successfully!"));
             await getBackToMainMenu();
         } else {
-          console.log(chalk.bold("Token was left unchanged."));
+          console.log(bold("Token was left unchanged."));
           await getBackToAdminPanel(discordId);
         }
       
@@ -136,9 +136,9 @@ async function cliAdminPanel(discordId: string){
           const remainingDays: number = await AuthTokenManager.getExpirationsDaysCount(new Date(token.expirationDate));
           console.log('\n'.repeat(1) + '='.repeat(75) + '\n'.repeat(1));
 
-          console.log(`Discord ID: ${chalk.bold(token.discordID)}`);
-          console.log(`Auth Token: ${chalk.bold(token.token)}`);
-          console.log(`Remaining days: ${chalk.bold(remainingDays)}`)
+          console.log(`Discord ID: ${bold(token.discordID)}`);
+          console.log(`Auth Token: ${bold(token.token)}`);
+          console.log(`Remaining days: ${bold(remainingDays)}`)
 
           console.log('\n'.repeat(1) + '='.repeat(75));
         }
@@ -157,7 +157,7 @@ async function cliAdminPanel(discordId: string){
         exit();
     } 
   } else {
-    console.log(chalk.bold('- User with such Discord ID does not exists!'));
+    console.log(bold('- User with such Discord ID does not exists!'));
     await getBackToMainMenu();
   }
 
@@ -177,7 +177,7 @@ async function cli(){
         }
         console.log(data);
       });
-    console.log(chalk.bold('- Welcome @moonwz!'));
+    console.log(bold('- Welcome @moonwz!'));
   
     const answer = await select({
       message: 'Select an option.',
@@ -237,14 +237,14 @@ async function cli(){
               const token: AuthToken = { discordID: discordId, token: generatedToken, expirationDate: generatedDate};
 
               if (await AuthTokenStorageManager.addToken(token)){
-                console.log(chalk.bold(`- Successfully generated and saved token:\n${generatedToken}`));
+                console.log(bold(`- Successfully generated and saved token:\n${generatedToken}`));
               }
 
               await sleep(500);
               await getBackToMainMenu();
             } else {
               await sleep(500);
-              console.log(chalk.bold('- Token for this user already exists in system.'));
+              console.log(bold('- Token for this user already exists in system.'));
 
               const toRewrite = await confirm({ message: 'Rewrite token for this user?' });
               if (toRewrite){
@@ -265,7 +265,7 @@ async function cli(){
           const dotenvPath: string = join(__dirname, '.env');
           try{
             await fs.access(dotenvPath, undefined);
-            console.log(chalk.bold('File .env already exists.'));
+            console.log(bold('File .env already exists.'));
             await getBackToMainMenu();
           } catch (error){
             const PORT = '3000';

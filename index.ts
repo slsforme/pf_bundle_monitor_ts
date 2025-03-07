@@ -18,7 +18,7 @@ async function main(){
         path.join(ACCOUNTS_MODULE_BASE_PATH, 'accountsMonitor.ts'),
     ];
 
-    const runFile = (module: string) => {
+    const runFile = async (module: string) => {
         const child = spawn('npx', ['ts-node', module], { stdio: 'inherit' });
     
         child.on('error', (err) => {
