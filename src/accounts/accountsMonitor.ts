@@ -3,6 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { asyncLogger } from "../../config/appConfig";
+import { isExchangeWallet } from 'src/whitelist/exchangeChecker';
+import { isWhitelistedProgram } from 'src/whitelist/programChecker';
 
 const blacklistFilePath = path.join(__dirname, '../data/blacklist-wallets.json');
 const whitelistFilePath = path.join(__dirname, '../data/whitelist-wallets.txt');
@@ -95,6 +97,13 @@ export class BlacklistHandler {
       }
   }
 
+  public static async addWalletToWhitelist(wallet: string): Promise<void> {
+    if (!this.whiteList.includes(wallet)) {
+      this.whiteList.push(wallet);
+      await fs.promises.writeFile(whitelistFilePath, this.whiteList.join('\n'), 'utf8');
+    }
+  }  
+
 
   public static async addWalletToBlacklist(wallet: string, token: string): Promise<boolean> {
     try {
@@ -144,11 +153,17 @@ export class BlacklistHandler {
         if (value >= 3 && !this.blacklist.has(key)) {
           const isBlacklisted = await BlacklistHandler.isWalletOnBlacklist(key);
           if (!isBlacklisted) {
-            this.blacklist.add(key);
-            const added = await BlacklistHandler.addWalletToBlacklist(key, token);
-            if (added) {
-              asyncLogger.info(`Account ${key} got blacklisted.`);
-              await this.findAndLogRelations(token, account);
+            if (await isExchangeWallet(key) || await isWhitelistedProgram(key))
+            {
+              BlacklistHandler.addWalletToWhitelist(key);
+              asyncLogger.info(`Added ${key} to whitelist.`)
+            } else {
+              this.blacklist.add(key);
+              const added = await BlacklistHandler.addWalletToBlacklist(key, token);
+              if (added) {
+                asyncLogger.info(`Account ${key} got blacklisted.`);
+                await this.findAndLogRelations(token, account);
+              }
             }
           }
         } 
