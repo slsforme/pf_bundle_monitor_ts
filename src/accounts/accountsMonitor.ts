@@ -106,7 +106,7 @@ export class BlacklistHandler {
       const blacklistedAddress: BlacklistedAddress = { mintAddress: token, accountAddress: wallet };
       const blacklistData: BlacklistedAddress[] = JSON.parse(await fs.promises.readFile(blacklistFilePath, 'utf8').catch(() => ''));
       blacklistData.push(blacklistedAddress);
-      await fs.promises.writeFile(blacklistFilePath, JSON.stringify(blacklistData, null, 2));
+      await fs.promises.writeFile(blacklistFilePath, JSON.stringify(blacklistData, null, 2).trim());
       blacklist.add(wallet);
       cachedBlacklist = blacklist;
       lastBlacklistUpdate = Date.now();
