@@ -159,7 +159,7 @@ export class PumpFunMonitor {
 
       const message = {
         mintAddress: mintAddress,
-        expirationTime: new Date().toISOString, 
+        expirationTime: new Date(), 
       };
   
       await producer.send({
