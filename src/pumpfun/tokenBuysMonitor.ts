@@ -17,7 +17,6 @@ class TokenBuyMonitor {
   constructor() {
     this.client = client;
     this.initKafkaConsumer();
-    this.initKafkaProducer();
     this.monitorTasks();
     this.startProcessing();
   }
@@ -120,7 +119,7 @@ class TokenBuyMonitor {
     this.kafkaConsumer = kafka.consumer({ groupId: 'token-buys-monitor' });
 
     await this.kafkaConsumer.connect();
-    await this.kafkaConsumer.subscribe({ topic: 'topic3', fromBeginning: true });
+    await this.kafkaConsumer.subscribe({ topic: 'pumpfunTopic', fromBeginning: true });
 
     await this.kafkaConsumer.run({
       eachMessage: async ({ topic, partition, message }) => {
@@ -137,18 +136,7 @@ class TokenBuyMonitor {
       },
     });
 
-    asyncLogger.info('tokenBuysMonitor Kafka consumer connected and listening for messages on topic3.');
-  }
-
-  private async initKafkaProducer() {
-    const kafka = new Kafka({
-      clientId: 'app',
-      brokers: ['localhost:9092'],
-    });
-
-    this.kafkaProducer = kafka.producer();
-    await this.kafkaProducer.connect();
-    asyncLogger.info('tokenBuysMonitor Kafka producer connected.');
+    asyncLogger.info('tokenBuysMonitor Kafka consumer connected and listening for messages on pumpfunTopic.');
   }
 
   private startProcessing() {

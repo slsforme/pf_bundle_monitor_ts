@@ -221,7 +221,7 @@ class AccountsMonitor {
     this.kafkaConsumer = kafka.consumer({ groupId: 'accounts-monitor' });
 
     await this.kafkaConsumer.connect();
-    await this.kafkaConsumer.subscribe({ topic: 'topic6', fromBeginning: true });
+    await this.kafkaConsumer.subscribe({ topic: 'blocksTopic', fromBeginning: true });
 
     await this.kafkaConsumer.run({
       eachMessage: async ({ topic, partition, message }) => {
