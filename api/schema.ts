@@ -65,5 +65,5 @@ app.post(DEFAULT_API_PATH + 'check/', async (req: Request<{}, {}, CheckerRequest
 const server = http.createServer(app);
 
 server.listen(PORT, () => {
-  console.log('Server running on http://localhost:3000');
+  asyncLogger.info('Server is running with nginx.');
 });
