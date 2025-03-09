@@ -1,5 +1,3 @@
-
-
 export interface CheckerRequestBody {
     mintAddress: string; 
 }

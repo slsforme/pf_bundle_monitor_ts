@@ -10,12 +10,14 @@ async function main(){
     const PUMPFUN_MODULE_BASE_PATH = path.join(BASE_PATH, 'pumpfun/');
     const BLOCKS_MODULE_BASE_PATH = path.join(BASE_PATH, 'blocks/');
     const ACCOUNTS_MODULE_BASE_PATH = path.join(BASE_PATH, 'accounts/');
+    const API_BASE_PATH = path.join(BASE_PATH, 'api/')
 
     const MODULES: Array<string> = [
         path.join(PUMPFUN_MODULE_BASE_PATH, 'pumpFunMonitor.ts'),
         path.join(PUMPFUN_MODULE_BASE_PATH, 'tokenBuysMonitor.ts'),
         path.join(BLOCKS_MODULE_BASE_PATH, 'blocksMonitor.ts'),
         path.join(ACCOUNTS_MODULE_BASE_PATH, 'accountsMonitor.ts'),
+        path.join(API_BASE_PATH, 'schema.ts')
     ];
 
     const runFile = async (module: string) => {
