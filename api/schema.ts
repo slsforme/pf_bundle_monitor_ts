@@ -41,7 +41,7 @@ app.get(DEFAULT_API_PATH, (req: Request, res: Response) => {
         res.json({ message: "Welcome to the FILTRED API." });
     } catch (error){
         res.status(500).json({ message: "An error occurred." });
-        asyncLogger.error(error);
+        asyncLogger.error(`Error on API occurred: ${error}`);
     }
 });
 
@@ -58,12 +58,12 @@ app.post(DEFAULT_API_PATH + 'check/', async (req: Request<{}, {}, CheckerRequest
         }
     } catch (error) {
         res.status(500).json({ message: "An error occurred while checking the blacklist." });
-        asyncLogger.error(error);
+        asyncLogger.error(`Error on API occurred: ${error}`);
     }
 });
 
 const server = http.createServer(app);
 
-server.listen(PORT, 'pf-bundle-monitor', async () => {
+server.listen(PORT, 'localhost', async () => {
   asyncLogger.info('Server is running with nginx.');
 });
