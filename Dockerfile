@@ -10,7 +10,7 @@ COPY . .
 
 RUN npm i -g ts-node
 
-EXPOSE 6379
+EXPOSE 6379 3000
 
 CMD ["npm", "run", "start"]
 

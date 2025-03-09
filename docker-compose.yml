@@ -53,6 +53,19 @@ services:
     networks:
       - app-network
 
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile  
+    container_name: nginx
+    ports:
+      - "8080:8080"  
+    depends_on:
+      - pf-bundle-monitor  
+    networks:
+      - app-network
+    restart: on-failure
+
 networks:
   app-network:
     driver: bridge
