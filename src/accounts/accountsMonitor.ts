@@ -2,7 +2,7 @@ import { Kafka } from 'kafkajs';
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { asyncLogger } from "../../config/appConfig";
+import { asyncLogger, kafkaConfig } from "../../config/appConfig";
 import { isExchangeWallet } from '../whitelist/exchangeChecker';
 import { isWhitelistedProgram } from '../whitelist/programChecker';
 
@@ -213,10 +213,7 @@ class AccountsMonitor {
   }
 
   private async initKafkaConsumer() {
-    const kafka = new Kafka({
-      clientId: 'app',
-      brokers: ['localhost:9092'],
-    });
+    const kafka = new Kafka(kafkaConfig);
 
     this.kafkaConsumer = kafka.consumer({ groupId: 'accounts-monitor' });
 

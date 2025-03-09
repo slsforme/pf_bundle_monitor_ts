@@ -1,7 +1,7 @@
 import Client, { CommitmentLevel, SubscribeRequest, SubscribeUpdate } from "@triton-one/yellowstone-grpc";
 import { Kafka } from 'kafkajs';
 
-import { backupClient, client, asyncLogger } from "../../config/appConfig";
+import { backupClient, client, asyncLogger, kafkaConfig } from "../../config/appConfig";
 import { bOutput } from "./utils/blockOutput";
 import { tOutPut } from "./utils/transactionOutput";
 import { addToWallets, findMatchInTransaction, getKeyAccount } from "../redis/transactionHandler";
@@ -98,10 +98,7 @@ class BlocksMonitor {
   }
 
   private async initKafkaProducer() {
-    const kafka = new Kafka({
-      clientId: 'app',
-      brokers: ['localhost:9092'],
-    });
+    const kafka = new Kafka(kafkaConfig);
 
     this.kafkaProducer = kafka.producer();
     await this.kafkaProducer.connect();
@@ -140,7 +137,7 @@ class BlocksMonitor {
             }
 
             this.kafkaProducer.send({
-              topic: "topic6",
+              topic: "blocksTopic",
               messages: [{ value: JSON.stringify(message) }]
             })
 

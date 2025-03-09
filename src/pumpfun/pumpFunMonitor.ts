@@ -3,12 +3,9 @@ import { Kafka } from "kafkajs";
 
 import { pumpFunTransactionOutput } from "./utils/pumpFunTransactionOutput";
 import { grpcUrl, backupGrpcUrl } from "../../config/config";
-import { asyncLogger, client, backupClient } from "../../config/appConfig";
+import { asyncLogger, client, backupClient, kafkaConfig } from "../../config/appConfig";
 
-const kafka = new Kafka({
-  clientId: 'app',
-  brokers: ['localhost:9092'],
-});
+const kafka = new Kafka(kafkaConfig);
 
 const producer = kafka.producer()
 
@@ -110,7 +107,6 @@ export class PumpFunMonitor {
         return;
       }
       
-      // Set up event handlers
       stream.on("error", (error) => {
         asyncLogger.error(`Stream error: ${error instanceof Error ? error.message : String(error)}`);
         stream.end();
@@ -129,7 +125,6 @@ export class PumpFunMonitor {
 
       stream.on("data", this.handleStreamData.bind(this));
       
-      // Send subscription request
       stream.write(this.request, (err) => {
         if (err) {
           asyncLogger.error(`Subscription request error: ${err.message}`);

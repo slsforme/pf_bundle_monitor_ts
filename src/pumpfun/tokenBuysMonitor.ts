@@ -2,7 +2,7 @@ import Client, { CommitmentLevel, SubscribeRequest, SubscribeUpdate } from "@tri
 import { Kafka } from 'kafkajs';
 
 import { tOutPut } from "./utils/transactionOutput";
-import { backupClient, client, asyncLogger, redis } from "../../config/appConfig";
+import { backupClient, client, asyncLogger, kafkaConfig } from "../../config/appConfig";
 import { BlacklistHandler } from "../accounts/accountsMonitor";
 import { addToWallets } from "../../src/redis/transactionHandler";
 
@@ -11,7 +11,6 @@ type StreamsPair = [Date, string];
 class TokenBuyMonitor {
   private client: Client;
   private kafkaConsumer: any;
-  private kafkaProducer: any;
   private streams = new Map<any, StreamsPair>();
 
   constructor() {
@@ -111,10 +110,7 @@ class TokenBuyMonitor {
   }
 
   private async initKafkaConsumer() {
-    const kafka = new Kafka({
-      clientId: 'app',
-      brokers: ['localhost:9092'],
-    });
+    const kafka = new Kafka(kafkaConfig);
 
     this.kafkaConsumer = kafka.consumer({ groupId: 'token-buys-monitor' });
 
