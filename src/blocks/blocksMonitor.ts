@@ -51,6 +51,7 @@ class BlocksMonitor {
         try{
           const block = await bOutput(data);
           if (!block) return;
+          // Proceed to kafka
           this.parseTransactions(block.txs);
 
         } catch(error){
@@ -105,53 +106,58 @@ class BlocksMonitor {
     asyncLogger.info('tokenBuysMonitor Kafka producer connected.');
   }
 
-  private async parseTransactions(txs: Array<any>){
-    for (const tx of txs)
-    {
-      const decodedTx = await tOutPut(tx);
-      
-      const isOutflow = (decodedTx.postBalance - decodedTx.preBalance) < 0;
-      const transferAmount = isOutflow 
-        ? (decodedTx.preBalance - decodedTx.postBalance)
-        : (decodedTx.postBalance - decodedTx.preBalance);
+  
+  private async parseTransactions(txs: Array<any>) {
+    const promises = txs.map(async (tx) => {
+      try {
+        const decodedTx = await tOutPut(tx);
+        const balanceDifference = decodedTx.postBalance - decodedTx.preBalance;
+        const isOutflow = balanceDifference < 0;
+        const transferAmount = Math.abs(balanceDifference);
         
-      if (transferAmount / 1_000_000_000 >= 0.1 && decodedTx.accountKeys.length < 7) {
-
+        if (transferAmount / 1_000_000_000 < 0.1 || decodedTx.accountKeys.length >= 7) {
+          return;
+        }
+        
         const [matchedWallets, mintAddress, keyAccount] = await findMatchInTransaction(decodedTx.accountKeys);
-        if (matchedWallets.length){
-          const account: string = matchedWallets[0];
-          const wallet = decodedTx.accountKeys[0] === account
+        if (!matchedWallets.length) {
+          return;
+        }
+        
+        const account = matchedWallets[0];
+        const wallet = decodedTx.accountKeys[0] === account
           ? decodedTx.accountKeys[1]
           : decodedTx.accountKeys[0];
+        
+        const flowType = isOutflow ? "outflow" : "inflow";
+        const walletOnWhitelist = await BlacklistHandler.isWalletOnWhitelist(wallet);
+        
+        if (!walletOnWhitelist) {
+          asyncLogger.info(`Found ${flowType} tx: ${decodedTx.signature} by ${account}\n Tracking ${isOutflow ? "receiver" : "sender"} wallet: ${wallet}`);
           
-          const flowType = isOutflow ? "outflow" : "inflow";
-          const walletOnWhitelist: boolean = await BlacklistHandler.isWalletOnWhitelist(wallet);
-          if (!walletOnWhitelist)
-          {
-            asyncLogger.info(`Found ${flowType} tx: ${decodedTx.signature} by ${account}\n Tracking ${isOutflow ? "receiver" : "sender"} wallet: ${wallet}`);
-            await addToWallets(mintAddress[0], wallet);
-            const message = {
-              mintAddress: mintAddress,
-              account: wallet,
-              keyAccount: keyAccount
-            }
-
-            this.kafkaProducer.send({
-              topic: "blocksTopic",
-              messages: [{ value: JSON.stringify(message) }]
-            })
-
-            asyncLogger.info(`Sent info to accountsMonitor: ${JSON.stringify(message)}`);
-          } 
-          else {
-            if (isOutflow && (decodedTx.postBalance / 1_000_000_000) < 0.1)
-            {
-              asyncLogger.info(`Found outflow tx: ${decodedTx.signature} by ${account} to exchange - whitelist wallet: ${wallet} `);
-            }
-          }
+          await addToWallets(mintAddress[0], wallet);
+          
+          const message = {
+            mintAddress,
+            account: wallet,
+            keyAccount
+          };
+          
+          await this.kafkaProducer.send({
+            topic: "blocksTopic",
+            messages: [{ value: JSON.stringify(message) }]
+          });
+          
+          asyncLogger.info(`Sent info to accountsMonitor: ${JSON.stringify(message)}`);
+        } else if (isOutflow && (decodedTx.postBalance / 1_000_000_000) < 0.1) {
+          asyncLogger.info(`Found outflow tx: ${decodedTx.signature} by ${account} to exchange - whitelist wallet: ${wallet}`);
         }
+      } catch (error) {
+        asyncLogger.error(`Error processing transaction: ${error.message}`);
       }
-    } 
+    });
+    
+    await Promise.all(promises);
   }
 
 }

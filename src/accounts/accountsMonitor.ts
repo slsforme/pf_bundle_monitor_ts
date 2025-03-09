@@ -31,8 +31,6 @@ export class BlacklistHandler {
     .map(item => item.replace(/[\r\n\s]+/g, '')); 
   }
 
-
-
   public static async getBlacklist(): Promise<Set<string>> {
     const currentTime = Date.now();
     
@@ -111,11 +109,30 @@ export class BlacklistHandler {
       if (blacklist.has(wallet)) {
         return false; 
       }
-
+  
       const blacklistedAddress: BlacklistedAddress = { mintAddress: token, accountAddress: wallet };
-      const blacklistData: BlacklistedAddress[] = JSON.parse(await fs.promises.readFile(blacklistFilePath, 'utf8').catch(() => ''));
+      
+      // Используем безопасный способ чтения JSON файла
+      let blacklistData: BlacklistedAddress[] = [];
+      try {
+        if (fs.existsSync(blacklistFilePath)) {
+          const fileContent = await fs.promises.readFile(blacklistFilePath, 'utf8');
+          // Проверяем, что содержимое не пустое и является валидным JSON
+          if (fileContent.trim()) {
+            blacklistData = JSON.parse(fileContent);
+          }
+        }
+      } catch (error) {
+        asyncLogger.error(`Error reading blacklist file: ${error}`);
+        // Если не удалось прочитать файл, используем пустой массив
+        blacklistData = [];
+      }
+      
       blacklistData.push(blacklistedAddress);
-      await fs.promises.writeFile(blacklistFilePath, JSON.stringify(blacklistData, null, 2).trim());
+      
+      // Записываем данные в файл без лишних символов
+      await fs.promises.writeFile(blacklistFilePath, JSON.stringify(blacklistData, null, 2));
+      
       blacklist.add(wallet);
       cachedBlacklist = blacklist;
       lastBlacklistUpdate = Date.now();

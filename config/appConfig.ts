@@ -107,7 +107,7 @@ export const kafkaConfig = {
   brokers: [process.env.KAFKA_BROKERS || 'localhost:9092'],
   connectionTimeout: 10000,
   requestTimeout: 30000,
-  maxPartitionFetchBytes: 1048576, 
+  maxPartitionFetchBytes: 1048576 * 2, 
   maxFetchBytes: 52428800, 
   fetchMaxBytes: 52428800 
 };

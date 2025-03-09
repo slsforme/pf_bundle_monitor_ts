@@ -1,0 +1,17 @@
+node_modules
+
+/logs
+*.log
+
+.env
+
+dist
+build
+
+.git
+.gitignore
+
+*.tmp
+*.swp
+
+/src/data/src/data/blacklist-wallets.json
