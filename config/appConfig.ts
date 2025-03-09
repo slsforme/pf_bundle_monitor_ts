@@ -104,7 +104,7 @@ export const redis = new Redis({
 // kafka
 export const kafkaConfig = {
   clientId: 'my-client',
-  brokers: ['localhost:9092'],
+  brokers: [process.env.KAFKA_BROKERS || 'localhost:9092'],
   connectionTimeout: 10000,
   requestTimeout: 30000,
   maxPartitionFetchBytes: 1048576, 
