@@ -64,6 +64,6 @@ app.post(DEFAULT_API_PATH + 'check/', async (req: Request<{}, {}, CheckerRequest
 
 const server = http.createServer(app);
 
-server.listen(PORT, () => {
+server.listen(PORT, 'pf-bundle-monitor', async () => {
   asyncLogger.info('Server is running with nginx.');
 });
