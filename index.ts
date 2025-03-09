@@ -46,5 +46,6 @@ main().catch((error) => {
  * + setup shell script / add redis & kafka to Dockerfile
  * + new log file every hour (keep dir for each day)
  * + TOFIX grpc error with url
+ * + limit_req nginx
  */
 

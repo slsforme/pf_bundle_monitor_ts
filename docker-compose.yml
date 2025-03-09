@@ -15,9 +15,26 @@ services:
       - KAFKA_PORT=9092
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+    ports:
+      - "3000:3000"
+    labels:
+      - "nginx.domain=pf-bundle-monitor.localhost"
     networks:
       - app-network
     restart: on-failure
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - pf-bundle-monitor
+    labels:
+      - "nginx.domain=localhost"  
+
 
   zookeeper:
     image: wurstmeister/zookeeper:latest
@@ -53,23 +70,9 @@ services:
     networks:
       - app-network
 
-  nginx:
-    build:
-      context: ./nginx
-      dockerfile: Dockerfile  
-    container_name: nginx
-    ports:
-      - "8080:8080"  
-    depends_on:
-      - pf-bundle-monitor  
-    networks:
-      - app-network
-    restart: on-failure
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
-
 networks:
   app-network:
+    name: app-network
     driver: bridge
 
 volumes:

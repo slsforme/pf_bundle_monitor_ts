@@ -31,10 +31,11 @@ app.use(cors({
 app.use(helmet());
 app.use(express.json());
 
-app.use('/docs', swaggerUi.serve);
-app.get('/docs', swaggerUi.setup(swaggerDocument));
 
 app.use(DEFAULT_API_PATH, createAuthorizationMiddleware());
+
+app.use(DEFAULT_API_PATH + '/docs', swaggerUi.serve);
+app.get(DEFAULT_API_PATH + '/docs', swaggerUi.setup(swaggerDocument));
 
 app.get(DEFAULT_API_PATH, (req: Request, res: Response) => {
     try{
@@ -64,6 +65,6 @@ app.post(DEFAULT_API_PATH + 'check/', async (req: Request<{}, {}, CheckerRequest
 
 const server = http.createServer(app);
 
-server.listen(PORT, 'localhost', async () => {
-  asyncLogger.info('Server is running with nginx.');
+server.listen(PORT, async () => {
+  asyncLogger.info('Server is currently running on port 3000.');
 });
