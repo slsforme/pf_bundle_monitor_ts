@@ -3,6 +3,7 @@ import path from 'path';
 import { asyncLogger } from './config/appConfig';
 
 const SRC_PATH: string = 'src/';
+const API_BASE_PATH: string = 'api/';
 
 async function main(){
     const BASE_PATH = path.join(__dirname, SRC_PATH);
@@ -10,7 +11,6 @@ async function main(){
     const PUMPFUN_MODULE_BASE_PATH = path.join(BASE_PATH, 'pumpfun/');
     const BLOCKS_MODULE_BASE_PATH = path.join(BASE_PATH, 'blocks/');
     const ACCOUNTS_MODULE_BASE_PATH = path.join(BASE_PATH, 'accounts/');
-    const API_BASE_PATH = path.join(BASE_PATH, 'api/')
 
     const MODULES: Array<string> = [
         path.join(PUMPFUN_MODULE_BASE_PATH, 'pumpFunMonitor.ts'),
