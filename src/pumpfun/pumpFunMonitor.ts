@@ -163,7 +163,7 @@ export class PumpFunMonitor {
       };
   
       await producer.send({
-        topic: 'topic3', 
+        topic: 'pumpfunTopic', 
         messages: [{ value: JSON.stringify(message) }]
       });
 

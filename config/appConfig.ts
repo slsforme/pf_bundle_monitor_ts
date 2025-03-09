@@ -96,4 +96,18 @@ export const asyncLogger = {
 // Clients & Redis Component
 export const client: Client = new Client(grpcUrl, undefined, { "grpc.max_receive_message_length": 64 * 1024 * 1024 });
 export const backupClient: Client = new Client(backupGrpcUrl, undefined, { "grpc.max_receive_message_length": 64 * 1024 * 1024 });
-export const redis = new Redis();
+export const redis = new Redis({
+  host: process.env.REDIS_HOST || 'localhost',
+  port: parseInt(process.env.REDIS_PORT || '6379', 10),
+});
+
+// kafka
+export const kafkaConfig = {
+  clientId: 'my-client',
+  brokers: ['localhost:9092'],
+  connectionTimeout: 10000,
+  requestTimeout: 30000,
+  maxPartitionFetchBytes: 1048576, 
+  maxFetchBytes: 52428800, 
+  fetchMaxBytes: 52428800 
+};

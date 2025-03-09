@@ -236,7 +236,7 @@ class AccountsMonitor {
       },
     });
 
-    asyncLogger.info('accountsMonitor Kafka consumer connected and listening for messages on topic5.');
+    asyncLogger.info('accountsMonitor Kafka consumer connected and listening for messages on blocksTopic.');
   }
 }
 
