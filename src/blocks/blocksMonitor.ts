@@ -138,9 +138,9 @@ class BlocksMonitor {
           await addToWallets(mintAddress[0], wallet);
           
           const message = {
-            mintAddress,
+            mintAddress: mintAddress,
             account: wallet,
-            keyAccount
+            keyAccount: keyAccount
           };
           
           await this.kafkaProducer.send({
