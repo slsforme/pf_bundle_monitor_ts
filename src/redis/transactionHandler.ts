@@ -33,7 +33,6 @@ export async function findMatchInTransaction(accountKeys: Array<string>): Promis
         for (const key of keys) {
             const keyType = await redis.type(key);
             
-            // Only proceed if it's a set
             if (keyType === 'set') {
                 mintAddress = key;
                 try {
@@ -48,13 +47,22 @@ export async function findMatchInTransaction(accountKeys: Array<string>): Promis
                         break;
                     }
                 } catch (error) {
-                    // Log the error but continue processing other keys
                     console.error(`Error processing key ${key}: ${error.message}`);
                 }
             } else {
                 asyncLogger.info(`Key type is ${keyType}`);
                 asyncLogger.info(`Key is ${key}`);
                 asyncLogger.info(`Data in key: ${await getWallets(key)}`);
+
+                // // test
+                // const stringValue = await redis.get(key);
+        
+                // if (stringValue && accountKeys.includes(stringValue) && !SYSTEM_PROGRAMS.includes(stringValue)) {
+                //     matchedWallets = [stringValue];
+                //     mintAddress = key;
+                //     keyAccount = stringValue;
+                //     break;
+                // }
             }
         }
     } while (cursor !== '0' && matchedWallets.length === 0); 

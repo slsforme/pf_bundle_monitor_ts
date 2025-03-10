@@ -5,6 +5,7 @@ import * as path from 'path';
 import { asyncLogger, kafkaConfig } from "../../config/appConfig";
 import { isExchangeWallet } from '../whitelist/exchangeChecker';
 import { isWhitelistedProgram } from '../whitelist/programChecker';
+import { startJsonFileMonitoring } from './utils/blacklistCleaner';
 
 const blacklistFilePath = path.join(__dirname, '../data/blacklist-wallets.json');
 const whitelistFilePath = path.join(__dirname, '../data/whitelist-wallets.txt');
@@ -29,6 +30,7 @@ export class BlacklistHandler {
     BlacklistHandler.whiteList = fs.readFileSync(whitelistFilePath, 'utf8')
     .split('\n')
     .map(item => item.replace(/[\r\n\s]+/g, '')); 
+    startJsonFileMonitoring();
   }
 
   public static async getBlacklist(): Promise<Set<string>> {
