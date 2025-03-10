@@ -53,6 +53,8 @@ export async function findMatchInTransaction(accountKeys: Array<string>): Promis
                 }
             } else {
                 asyncLogger.info(`Key type is ${keyType}`);
+                asyncLogger.info(`Key is ${key}`);
+                asyncLogger.info(`Data in key: ${await getWallets(key)}`);
             }
         }
     } while (cursor !== '0' && matchedWallets.length === 0); 
