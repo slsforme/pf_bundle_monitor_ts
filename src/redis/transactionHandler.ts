@@ -20,72 +20,30 @@ export async function removeFromWallets(key: string) {
 }
 
 export async function findMatchInTransaction(accountKeys: Array<string>): Promise<[string[], string, string | null]> {
-    // Filter out system programs from account keys to avoid unnecessary checks
-    const filteredAccountKeys = accountKeys.filter(key => !SYSTEM_PROGRAMS.includes(key));
-    
-    // If no valid account keys remain after filtering, return early
-    if (filteredAccountKeys.length === 0) {
-        return [[], '', null];
-    }
-    
-    // Create a set for faster lookups
-    const accountKeySet = new Set(filteredAccountKeys);
-    
-    let cursor = '0';
+    let cursor = '0'; 
     let matchedWallets: string[] = [];
     let mintAddress: string = '';
-    let keyAccount: string | null = null;
-    
-    // Process in batches for better performance
-    const processBatch = async (keys: string[]) => {
-        // Get all wallets for all keys in parallel
-        const walletsPromises = keys.map(async (key) => {
-            const wallets = await getWallets(key);
-            // Return early if no wallets match
-            const matches = wallets.filter(wallet => accountKeySet.has(wallet));
+    let keyAccount: string = '';
+
+    do {
+        const result = await redis.scan(cursor);
+        cursor = result[0]; 
+        const keys = result[1]; 
+
+        for (const key of keys) {
+            mintAddress = key;
+            const wallets = await getWallets(key); 
+            const filteredWallets = wallets.filter(element => accountKeys.includes(element) && !SYSTEM_PROGRAMS.includes(element));
             
-            if (matches.length > 0) {
-                return { key, matches };
-            }
-            return null;
-        });
-        
-        const results = await Promise.all(walletsPromises);
-        
-        // Find the first non-null result
-        const match = results.find(result => result !== null);
-        
-        if (match) {
-            mintAddress = match.key;
-            matchedWallets = match.matches;
-            keyAccount = await getKeyAccount(mintAddress);
-            return true; // Match found
-        }
-        
-        return false; // No match found in this batch
-    };
-    
-    try {
-        do {
-            const scanResult = await redis.scan(cursor, 'COUNT', '100'); // Scan with a larger count for better performance
-            cursor = scanResult[0];
-            const keys = scanResult[1];
-            
-            if (keys.length === 0) {
-                continue;
-            }
-            
-            const matchFound = await processBatch(keys);
-            if (matchFound) {
+            if (filteredWallets.length > 0) {
+                matchedWallets = filteredWallets;
+                keyAccount = await getKeyAccount(mintAddress);
                 break;
-            }
-        } while (cursor !== '0');
-        
-        return [matchedWallets, mintAddress, keyAccount];
-    } catch (error) {
-        console.error('Error in findMatchInTransaction:', error);
-        return [[], '', null];
-    }
+            } 
+        }
+    } while (cursor !== '0'); 
+
+    return [matchedWallets, mintAddress, keyAccount];
 }
 
 export async function getKeyAccount(mintAddress: string): Promise<string | null> {

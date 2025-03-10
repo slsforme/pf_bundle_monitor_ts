@@ -47,5 +47,6 @@ main().catch((error) => {
  * + new log file every hour (keep dir for each day)
  * + TOFIX grpc error with url
  * + limit_req nginx
+ * + backup rpc url 
  */
 
