@@ -172,8 +172,11 @@ export class BlacklistHandler {
           if (!isBlacklisted) {
             if (await isExchangeWallet(key) || await isWhitelistedProgram(key))
             {
-              BlacklistHandler.addWalletToWhitelist(key);
-              asyncLogger.info(`Added ${key} to whitelist.`)
+              if (!await BlacklistHandler.isWalletOnWhitelist(key))
+              {
+                BlacklistHandler.addWalletToWhitelist(key);
+                asyncLogger.info(`Added ${key} to whitelist.`)
+              }
             } else {
               this.blacklist.add(key);
               const added = await BlacklistHandler.addWalletToBlacklist(key, token);
@@ -216,6 +219,7 @@ export class BlacklistHandler {
       asyncLogger.info(related.join(' -> ')); 
       for (const wallet of related){
         BlacklistHandler.addWalletToBlacklist(wallet, token);
+        asyncLogger.info(`Added related wallet: ${wallet} to blacklist.`);
       }
     }
   }

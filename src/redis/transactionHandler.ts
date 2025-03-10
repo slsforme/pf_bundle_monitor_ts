@@ -1,4 +1,4 @@
-import { redis } from "../../config/appConfig";
+import { asyncLogger, redis } from "../../config/appConfig";
 
 const SYSTEM_PROGRAMS: Array<string> = [
     '11111111111111111111111111111111',
@@ -23,26 +23,40 @@ export async function findMatchInTransaction(accountKeys: Array<string>): Promis
     let cursor = '0'; 
     let matchedWallets: string[] = [];
     let mintAddress: string = '';
-    let keyAccount: string = '';
-
+    let keyAccount: string | null = null;
+    
     do {
         const result = await redis.scan(cursor);
         cursor = result[0]; 
         const keys = result[1]; 
-
+        
         for (const key of keys) {
-            mintAddress = key;
-            const wallets = await getWallets(key); 
-            const filteredWallets = wallets.filter(element => accountKeys.includes(element) && !SYSTEM_PROGRAMS.includes(element));
+            const keyType = await redis.type(key);
             
-            if (filteredWallets.length > 0) {
-                matchedWallets = filteredWallets;
-                keyAccount = await getKeyAccount(mintAddress);
-                break;
-            } 
+            // Only proceed if it's a set
+            if (keyType === 'set') {
+                mintAddress = key;
+                try {
+                    const wallets = await getWallets(key); 
+                    const filteredWallets = wallets.filter(element => 
+                        accountKeys.includes(element) && !SYSTEM_PROGRAMS.includes(element)
+                    );
+                    
+                    if (filteredWallets.length > 0) {
+                        matchedWallets = filteredWallets;
+                        keyAccount = await getKeyAccount(mintAddress);
+                        break;
+                    }
+                } catch (error) {
+                    // Log the error but continue processing other keys
+                    console.error(`Error processing key ${key}: ${error.message}`);
+                }
+            } else {
+                asyncLogger.info(`Key type is ${keyType}`);
+            }
         }
-    } while (cursor !== '0'); 
-
+    } while (cursor !== '0' && matchedWallets.length === 0); 
+    
     return [matchedWallets, mintAddress, keyAccount];
 }
 
